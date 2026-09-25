@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
-  Sparkles, Heart, Instagram, Tiktok, WhatsApp, MapPin, Phone, Mail,
+  Sparkles, Heart, MapPin, Phone, Mail,
   Search, X, Check, Shield, Truck, RotateCcw
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';

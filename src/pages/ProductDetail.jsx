@@ -2,7 +2,7 @@ import { useState, useEffect, useParams } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   Sparkles, Heart, Search, X, Check, Shield, Truck, RotateCcw,
-  Facebook, Twitter, Instagram, Tiktok, WhatsApp, MapPin, Phone, Mail,
+  MapPin, Phone, Mail,
   Minus, Plus, Delete, CheckCircle, ShoppingCart
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';

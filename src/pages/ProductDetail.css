@@ -3,7 +3,7 @@
 /* --- Product Gallery --- */
 .product-gallery {
   position: relative;
-  border-radius: var(--border-radius) var(0 0 var(--border-radius) 0);
+  border-radius: var(--border-radius);
   overflow: hidden;
   background: var(--color-gold-light);
 }

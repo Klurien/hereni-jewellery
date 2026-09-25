@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
-  Sparkles, Heart, Instagram, Tiktok, WhatsApp, MapPin, Phone, Mail,
+  Sparkles, Heart, MapPin, Phone, Mail,
   Shield, Truck, RotateCcw
 } from 'lucide-react';
 import './About.css';
@@ -120,7 +120,7 @@ export function About() {
               </li>
               <li>
                 <span className="contact-info-icon">
-                  <WhatsApp className="icon" />
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 9a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2 2 2 0 0 1 2-2h2a2 2 0 0 1 2 2zM7 19a2 2 0 0 1-2-2H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h2a2 2 0 0 1 2 2zM7 13a2 2 0 0 1-2-2H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h2a2 2 0 0 1 2 2z"/></svg>
                 </span>
                 <div>
                   <strong>WhatsApp:</strong> <a href="https://wa.me/254116047583" target="_blank" rel="noopener noreferrer" className="contact-link">Message Us</a>
@@ -133,15 +133,15 @@ export function About() {
         {/* Social Links */}
         <div className="about-social">
           <span className="about-social-icon">
-            <Instagram className="icon" />
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/><line x1="12" y1="3" x2="12.01" y2="3"/></svg>
           </span>
           <p>Follow Us</p>
           <div className="social-links">
             <a href="https://instagram.com/hereni_jewellery" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="social-link">
-              <Instagram className="icon" />
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/><line x1="12" y1="3" x2="12.01" y2="3"/></svg>
             </a>
             <a href="https://tiktok.com/@hereni_jewellery" target="_blank" rel="noopener noreferrer" aria-label="TikTok" className="social-link">
-              <Tiktok className="icon" />
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15 22 18 8 12 11 9 8 5 11 2 12 2"/></svg>
             </a>
           </div>
         </div>
