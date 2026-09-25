@@ -1,125 +1,70 @@
-import { useEffect, useState } from 'react'
-import { Link, Route, Routes, useLocation } from 'react-router-dom'
+import { createContext, useContext, useEffect, useState } from 'react'
+import { Link, Route, Routes, useLocation, useParams } from 'react-router-dom'
+import { products, categories } from './data/products'
 
 const PHONE = '0116 047583'
-const WHATSAPP = 'https://wa.me/254116047583'
+const ORDER_PHONE = '+254 794 590 908'
+const WHATSAPP = 'https://wa.me/254794590908'
 const INSTAGRAM = 'https://www.instagram.com/hereni_jewellery/'
 const TIKTOK = 'https://www.tiktok.com/@hereni_jewellery'
+const CART_KEY = 'hereni-jewellery-cart-v1'
 
-const collections = [
-  { name: 'Flatbacks', note: 'A clean, comfortable start for a range of piercing placements.' },
-  { name: 'Clickers', note: 'Statement hoops and subtle everyday clicker styles.' },
-  { name: 'Studs', note: 'Easy layering essentials for a polished piercing look.' },
-  { name: 'Threadless ends', note: 'A considered finish for compatible threadless jewellery.' },
-  { name: 'Ear cuffs', note: 'No-piercing options to bring a little more jewellery to your look.' },
-  { name: 'Body jewellery', note: 'Ask about septum, helix, lobe and other available pieces.' },
-]
-
-function WhatsAppIcon() {
-  return <svg aria-hidden="true" viewBox="0 0 24 24" className="icon"><path d="M20.5 3.5A11.6 11.6 0 0 0 3.4 17L2 22l5.2-1.4A11.6 11.6 0 1 0 20.5 3.5Z"/><path d="M8.4 7.5c.2-.4.4-.4.6-.4h.5c.2 0 .4 0 .6.5l.8 1.9c.1.3.1.5-.1.7l-.6.7c-.2.2-.2.4-.1.6.5 1 1.1 1.8 2.1 2.4.3.2.5.1.7-.1l.7-.8c.2-.2.4-.2.6-.1l2 1c.3.1.4.3.4.5v.6c-.1.7-.9 1.4-1.6 1.5-1.2.2-3.1-.2-5.1-1.7-2.1-1.6-3.5-3.6-3.8-4.8-.2-.6.1-1.3.3-1.7Z"/></svg>
+function readCart() {
+  try { return JSON.parse(localStorage.getItem(CART_KEY)) || [] } catch { return [] }
 }
 
-function InstagramIcon() {
-  return <svg aria-hidden="true" viewBox="0 0 24 24" className="icon"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.4" cy="6.6" r=".7" fill="currentColor" stroke="none"/></svg>
+function CartProvider({ children }) {
+  const [items, setItems] = useState(readCart)
+  useEffect(() => localStorage.setItem(CART_KEY, JSON.stringify(items)), [items])
+  const add = product => setItems(current => {
+    const existing = current.find(item => item.id === product.id)
+    return existing ? current.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item) : [...current, { ...product, quantity: 1 }]
+  })
+  const remove = id => setItems(current => current.filter(item => item.id !== id))
+  const change = (id, quantity) => quantity < 1 ? remove(id) : setItems(current => current.map(item => item.id === id ? { ...item, quantity } : item))
+  const clear = () => setItems([])
+  const count = items.reduce((sum, item) => sum + item.quantity, 0)
+  const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  return <CartContext.Provider value={{ items, add, remove, change, clear, count, total }}>{children}</CartContext.Provider>
 }
+const CartContext = createContext()
+function useCart() { return useContext(CartContext) }
 
-function Sparkle() {
-  return <svg aria-hidden="true" viewBox="0 0 32 32" className="sparkle"><path d="M16 1c1 8 5 12 13 13-8 1-12 5-13 13-1-8-5-12-13-13C11 13 15 9 16 1Z"/><path d="M26 21c.4 3 1.7 4.3 4.7 4.7-3 .4-4.3 1.7-4.7 4.7-.4-3-1.7-4.3-4.7-4.7 3-.4 4.3-1.7 4.7-4.7Z"/></svg>
+function WhatsAppIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24" className="icon"><path d="M20.5 3.5A11.6 11.6 0 0 0 3.4 17L2 22l5.2-1.4A11.6 11.6 0 1 0 20.5 3.5Z"/><path d="M8.4 7.5c.2-.4.4-.4.6-.4h.5c.2 0 .4 0 .6.5l.8 1.9c.1.3.1.5-.1.7l-.6.7c-.2.2-.2.4-.1.6.5 1 1.1 1.8 2.1 2.4.3.2.5.1.7-.1l.7-.8c.2-.2.4-.2.6-.1l2 1c.3.1.4.3.4.5v.6c-.1.7-.9 1.4-1.6 1.5-1.2.2-3.1-.2-5.1-1.7-2.1-1.6-3.5-3.6-3.8-4.8-.2-.6.1-1.3.3-1.7Z"/></svg> }
+function InstagramIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24" className="icon"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.4" cy="6.6" r=".7" fill="currentColor" stroke="none"/></svg> }
+function Sparkle() { return <svg aria-hidden="true" viewBox="0 0 32 32" className="sparkle"><path d="M16 1c1 8 5 12 13 13-8 1-12 5-13 13-1-8-5-12-13-13C11 13 15 9 16 1Z"/><path d="M26 21c.4 3 1.7 4.3 4.7 4.7-3 .4-4.3 1.7-4.7 4.7-.4-3-1.7-4.3-4.7-4.7 3-.4 4.3-1.7 4.7-4.7Z"/></svg> }
+
+function ProductVisual({ kind = 'flatback', large = false }) {
+  return <div className={`product-visual visual-${kind} ${large ? 'visual-large' : ''}`} aria-hidden="true"><span></span><i></i><b></b></div>
 }
 
 function Header() {
   const [open, setOpen] = useState(false)
+  const [cartOpen, setCartOpen] = useState(false)
+  const { items, count, total, remove, change, clear } = useCart()
   const location = useLocation()
-
-  useEffect(() => setOpen(false), [location.pathname])
-
+  useEffect(() => { setOpen(false); setCartOpen(false) }, [location.pathname])
+  const enquiry = `Hi Hereni Jewellery, I'd like to order:\n${items.map(item => `• ${item.name} × ${item.quantity} — KES ${(item.price * item.quantity).toLocaleString()}`).join('\n')}\n\nTotal: KES ${total.toLocaleString()}`
+  const checkout = `${WHATSAPP}?text=${encodeURIComponent(enquiry)}`
   return <>
     <a className="skip-link" href="#main">Skip to content</a>
-    <header className="site-header">
-      <div className="shell header-inner">
-        <Link to="/" className="wordmark" aria-label="Hereni Jewellery home">
-          <span className="wordmark-mark"><Sparkle /></span>
-          <span>Hereni <b>Jewellery</b></span>
-        </Link>
-        <button className="menu-toggle" aria-expanded={open} aria-controls="site-nav" onClick={() => setOpen(!open)}>
-          <span className="sr-only">Toggle navigation</span><i></i><i></i>
-        </button>
-        <nav id="site-nav" className={`site-nav ${open ? 'is-open' : ''}`} aria-label="Main navigation">
-          <Link to="/collection">Collection</Link>
-          <Link to="/about">Our story</Link>
-          <Link to="/contact">Contact</Link>
-          <a className="nav-whatsapp" href={WHATSAPP} target="_blank" rel="noreferrer"><WhatsAppIcon /> WhatsApp</a>
-        </nav>
-      </div>
-    </header>
+    <header className="site-header"><div className="shell header-inner"><Link to="/" className="wordmark" aria-label="Hereni Jewellery home"><span className="wordmark-mark"><Sparkle /></span><span>Hereni <b>Jewellery</b></span></Link><button className="menu-toggle" aria-expanded={open} aria-controls="site-nav" onClick={() => setOpen(!open)}><span className="sr-only">Toggle navigation</span><i></i><i></i></button><nav id="site-nav" className={`site-nav ${open ? 'is-open' : ''}`} aria-label="Main navigation"><Link to="/collection">Shop</Link><Link to="/about">Our story</Link><Link to="/contact">Contact</Link><button className="cart-trigger" onClick={() => setCartOpen(true)}>Bag <span>{count}</span></button><a className="nav-whatsapp" href={WHATSAPP} target="_blank" rel="noreferrer"><WhatsAppIcon /> WhatsApp</a></nav></div></header>
+    {cartOpen && <div className="drawer-backdrop" onClick={() => setCartOpen(false)} />}
+    <aside className={`cart-drawer ${cartOpen ? 'open' : ''}`} aria-label="Shopping bag"><div className="drawer-head"><div><p className="eyebrow">Your selection</p><h2>Shopping bag <small>({count})</small></h2></div><button className="close-button" onClick={() => setCartOpen(false)} aria-label="Close shopping bag">×</button></div>{items.length === 0 ? <div className="empty-bag"><span>♡</span><p>Your bag is waiting for a little something.</p><Link className="button button-primary" to="/collection" onClick={() => setCartOpen(false)}>Explore pieces</Link></div> : <><div className="drawer-items">{items.map(item => <div className="drawer-item" key={item.id}><ProductVisual kind={item.art} /><div><h3>{item.name}</h3><p>KES {item.price.toLocaleString()}</p><div className="quantity"><button onClick={() => change(item.id, item.quantity - 1)} aria-label={`Decrease ${item.name}`}>−</button><span>{item.quantity}</span><button onClick={() => change(item.id, item.quantity + 1)} aria-label={`Increase ${item.name}`}>+</button></div></div><strong>KES {(item.price * item.quantity).toLocaleString()}</strong></div>)}</div><div className="drawer-total"><span>Total</span><strong>KES {total.toLocaleString()}</strong></div><a className="button button-primary full-button" href={checkout} target="_blank" rel="noreferrer">Continue to WhatsApp <span>↗</span></a><button className="clear-bag" onClick={clear}>Clear bag</button><p className="drawer-note">No payment is taken here. Hereni confirms availability, delivery and payment directly on WhatsApp.</p></>}</aside>
   </>
 }
 
-function Footer() {
-  return <footer className="site-footer">
-    <div className="shell footer-grid">
-      <div>
-        <Link to="/" className="wordmark footer-mark"><span className="wordmark-mark"><Sparkle /></span><span>Hereni <b>Jewellery</b></span></Link>
-        <p>Piercing jewellery for your everyday story. Based in Nairobi, Kenya.</p>
-      </div>
-      <div><h2>Explore</h2><Link to="/collection">Collection</Link><Link to="/about">Our story</Link><Link to="/contact">Contact</Link></div>
-      <div><h2>Say hello</h2><a href={WHATSAPP} target="_blank" rel="noreferrer">WhatsApp {PHONE}</a><a href={INSTAGRAM} target="_blank" rel="noreferrer">Instagram @hereni_jewellery</a><a href={TIKTOK} target="_blank" rel="noreferrer">TikTok @hereni_jewellery</a></div>
-    </div>
-    <div className="shell footer-bottom"><span>© {new Date().getFullYear()} Hereni Jewellery</span><span>Piercing jewellery, Nairobi</span></div>
-  </footer>
-}
+function Footer() { return <footer className="site-footer"><div className="shell footer-grid"><div><Link to="/" className="wordmark footer-mark"><span className="wordmark-mark"><Sparkle /></span><span>Hereni <b>Jewellery</b></span></Link><p>Piercing jewellery for your everyday story. Based in Nairobi, Kenya.</p></div><div><h2>Explore</h2><Link to="/collection">Shop all pieces</Link><Link to="/about">Our story</Link><Link to="/contact">Contact</Link></div><div><h2>Say hello</h2><a href={WHATSAPP} target="_blank" rel="noreferrer">WhatsApp {ORDER_PHONE}</a><a href={INSTAGRAM} target="_blank" rel="noreferrer">Instagram @hereni_jewellery</a><a href={TIKTOK} target="_blank" rel="noreferrer">TikTok @hereni_jewellery</a></div></div><div className="shell footer-bottom"><span>© {new Date().getFullYear()} Hereni Jewellery</span><span>Piercing jewellery, Nairobi</span></div></footer> }
+function Layout({ children }) { return <><Header /><main id="main">{children}</main><Footer /></> }
+function HomePage() { return <Layout><section className="hero shell"><div className="hero-copy"><p className="eyebrow">Hereni Jewellery · Nairobi</p><h1>Your piercing.<br /><em>Your signature.</em></h1><p className="hero-lede">Discover a considered collection of 18K gold-plated and sterling silver piercing jewellery. Find your piece, ask a question, and make it yours.</p><div className="actions"><Link className="button button-primary" to="/collection">Shop the collection <span>↗</span></Link><a className="button button-quiet" href={WHATSAPP} target="_blank" rel="noreferrer">Chat on WhatsApp</a></div><p className="hero-note">Availability and delivery details are confirmed directly on WhatsApp.</p></div><div className="hero-art" aria-label="Abstract gold jewellery illustration" role="img"><div className="orb orb-one"></div><div className="orb orb-two"></div><div className="ring ring-one"></div><div className="ring ring-two"></div><div className="gem"></div><span className="art-label">18K gold-plated<br />Sterling silver</span></div></section><section className="intro shell"><p className="eyebrow">A little more you</p><h2>Details that make the difference.</h2><div className="values"><article><span>01</span><h3>Made to layer</h3><p>Explore clean profiles and statement pieces to suit your own piercing routine.</p></article><article><span>02</span><h3>Ask before you choose</h3><p>Not sure about a placement, finish or size? Message Hereni for personal guidance.</p></article><article><span>03</span><h3>Shop your way</h3><p>Build a bag here, then complete your enquiry directly on WhatsApp.</p></article></div></section><section className="collection-teaser"><div className="shell"><div className="section-heading"><div><p className="eyebrow">The collection</p><h2>Find your next favourite.</h2></div><Link className="text-link" to="/collection">View all pieces →</Link></div><div className="collection-preview">{products.slice(0, 3).map(product => <Link to={`/product/${product.id}`} className="preview-card" key={product.id}><ProductVisual kind={product.art} /><div><p>{product.name}</p><span>KES {product.price.toLocaleString()} <b>↗</b></span></div></Link>)}</div></div></section><section className="contact-ribbon shell"><div><p className="eyebrow">Need a hand?</p><h2>Let’s find the right piece together.</h2><p>Ask about availability, finishes or how to style an existing piercing.</p></div><a className="button button-light" href={WHATSAPP} target="_blank" rel="noreferrer">Message {ORDER_PHONE} <span>↗</span></a></section></Layout> }
 
-function Layout({ children }) {
-  return <><Header /><main id="main">{children}</main><Footer /></>
-}
+function ProductCard({ product }) { const { add } = useCart(); return <article className="product-card"><Link to={`/product/${product.id}`} className="product-card-image"><ProductVisual kind={product.art} /></Link><div className="product-card-body"><div><p className="product-category">{product.category}</p><Link to={`/product/${product.id}`}><h2>{product.name}</h2></Link></div><strong>KES {product.price.toLocaleString()}</strong></div><button className="add-button" onClick={() => add(product)}>Add to bag <span>+</span></button></article> }
 
-function HomePage() {
-  return <Layout>
-    <section className="hero shell">
-      <div className="hero-copy">
-        <p className="eyebrow">Hereni Jewellery · Nairobi</p>
-        <h1>Your piercing.<br /><em>Your signature.</em></h1>
-        <p className="hero-lede">Discover a considered collection of 18K gold-plated and sterling silver piercing jewellery. Find your piece, ask a question, and make it yours.</p>
-        <div className="actions"><Link className="button button-primary" to="/collection">Explore the collection <span>↗</span></Link><a className="button button-quiet" href={WHATSAPP} target="_blank" rel="noreferrer">Chat on WhatsApp</a></div>
-        <p className="hero-note">Product availability, sizing and pricing are shared directly on WhatsApp.</p>
-      </div>
-      <div className="hero-art" aria-label="Abstract gold jewellery illustration" role="img">
-        <div className="orb orb-one"></div><div className="orb orb-two"></div><div className="ring ring-one"></div><div className="ring ring-two"></div><div className="gem"></div>
-        <span className="art-label">18K gold-plated<br />Sterling silver</span>
-      </div>
-    </section>
-    <section className="intro shell"><p className="eyebrow">A little more you</p><h2>Details that make the difference.</h2><div className="values"><article><span>01</span><h3>Made to layer</h3><p>Explore clean profiles and statement pieces to suit your own piercing routine.</p></article><article><span>02</span><h3>Ask before you choose</h3><p>Not sure about a placement, finish or size? Message Hereni for personal guidance.</p></article><article><span>03</span><h3>Shop your way</h3><p>Browse the collection here, then complete your enquiry directly on WhatsApp.</p></article></div></section>
-    <section className="collection-teaser"><div className="shell"><div className="section-heading"><div><p className="eyebrow">The collection</p><h2>Find your next favourite.</h2></div><Link className="text-link" to="/collection">View all collections →</Link></div><div className="collection-preview">{collections.slice(0, 3).map((item, index) => <Link to="/collection" className={`preview-card preview-${index + 1}`} key={item.name}><span className="preview-shape"></span><div><p>{item.name}</p><span>Explore <b>↗</b></span></div></Link>)}</div></div></section>
-    <section className="contact-ribbon shell"><div><p className="eyebrow">Need a hand?</p><h2>Let’s find the right piece together.</h2><p>Ask about availability, finishes or how to style an existing piercing.</p></div><a className="button button-light" href={WHATSAPP} target="_blank" rel="noreferrer">Message {PHONE} <span>↗</span></a></section>
-  </Layout>
-}
+function CollectionPage() { const [category, setCategory] = useState('All pieces'); const filtered = category === 'All pieces' ? products : products.filter(product => product.category === category); return <Layout><section className="page-hero shell"><p className="eyebrow">The collection</p><h1>Pieces for your piercing story.</h1><p>Browse the catalogue from our WhatsApp collection. Select a piece to add it to your bag, then send your order enquiry directly to Hereni.</p></section><section className="shell catalogue-layout"><div className="catalogue-main"><div className="filter-row" aria-label="Filter products">{categories.map(item => <button className={category === item ? 'active' : ''} onClick={() => setCategory(item)} key={item}>{item}</button>)}</div><p className="result-count">{filtered.length} pieces</p><div className="product-grid">{filtered.map(product => <ProductCard product={product} key={product.id} />)}</div></div><aside className="enquiry-card"><p className="eyebrow">Need help?</p><h2>Not sure where to start?</h2><p>Send Hereni a message with your piercing type and the finish you love. We’ll help you choose.</p><a className="button button-primary full-button" href={`${WHATSAPP}?text=${encodeURIComponent('Hi Hereni Jewellery, I need help choosing a piece.')}`} target="_blank" rel="noreferrer">Ask on WhatsApp <span>↗</span></a><div className="enquiry-detail"><span>Public enquiries</span><strong>{PHONE}</strong><span>Catalogue orders</span><strong>{ORDER_PHONE}</strong></div></aside></section></Layout> }
 
-function CollectionPage() {
-  const [selected, setSelected] = useState('')
-  const enquiry = selected ? `Hi Hereni Jewellery, I'm interested in ${selected}. Could you help me with availability and pricing?` : `Hi Hereni Jewellery, I'd like to ask about your piercing jewellery.`
-  const whatsappUrl = `${WHATSAPP}?text=${encodeURIComponent(enquiry)}`
+function ProductPage() { const { id } = useParams(); const product = products.find(item => item.id === id); const { add } = useCart(); if (!product) return <Layout><NotFoundPage /></Layout>; return <Layout><section className="shell product-page"><div className="product-page-visual"><ProductVisual kind={product.art} large /></div><div className="product-page-copy"><p className="eyebrow">{product.category}</p><h1>{product.name}</h1><strong className="product-page-price">KES {product.price.toLocaleString()}</strong><p className="product-page-description">A Hereni catalogue piece for your jewellery collection. Availability, sizing, finish options and delivery are confirmed directly on WhatsApp before you order.</p><button className="button button-primary" onClick={() => add(product)}>Add to bag <span>+</span></button><a className="button button-quiet" href={`${WHATSAPP}?text=${encodeURIComponent(`Hi Hereni Jewellery, I'm interested in ${product.name} (KES ${product.price.toLocaleString()}). Is it available?`)}`} target="_blank" rel="noreferrer">Ask about this piece</a><div className="detail-list"><div><span>Material</span><strong>18K gold-plated / sterling silver options</strong></div><div><span>Ordering</span><strong>Enquiry confirmed on WhatsApp</strong></div><div><span>Catalogue</span><strong>Hereni Jewellery · Nairobi</strong></div></div></div></section></Layout> }
+function AboutPage() { return <Layout><section className="page-hero shell"><p className="eyebrow">Hereni Jewellery</p><h1>Piercing jewellery with a personal touch.</h1><p>Hereni Jewellery is an online-based piercing jewellery brand based in Nairobi, Kenya.</p></section><section className="shell about-layout"><div className="about-art" role="img" aria-label="Abstract gold jewellery detail"><div className="about-ring"></div><div className="about-gem"></div></div><div className="about-copy"><p className="eyebrow">The short version</p><h2>A personal way to discover your next piece.</h2><p>Hereni shares 18K gold-plated and sterling silver jewellery for different piercing styles. Browse the catalogue, build a bag, and speak directly to the person behind it.</p><p>Have a question about a style, finish or placement? Reach Hereni on WhatsApp or Instagram and start there.</p><a className="button button-primary" href={WHATSAPP} target="_blank" rel="noreferrer">Start a conversation <span>↗</span></a></div></section></Layout> }
+function ContactPage() { const [form, setForm] = useState({ name: '', message: '' }); const url = `${WHATSAPP}?text=${encodeURIComponent(`Hi Hereni Jewellery${form.name ? `, this is ${form.name}` : ''}. ${form.message || 'I would like to ask about your jewellery.'}`)}`; return <Layout><section className="page-hero shell"><p className="eyebrow">Contact</p><h1>Let’s talk jewellery.</h1><p>Use this form to prepare a WhatsApp message. It opens WhatsApp with your details ready to send — nothing is submitted to this website.</p></section><section className="shell contact-layout"><form className="enquiry-form" onSubmit={event => event.preventDefault()}><label htmlFor="name">Your name (optional)</label><input id="name" value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} placeholder="How should Hereni address you?" /><label htmlFor="message">Your message</label><textarea id="message" rows="6" value={form.message} onChange={event => setForm({ ...form, message: event.target.value })} placeholder="Ask about a style, finish or placement…" /><a className="button button-primary" href={url} target="_blank" rel="noreferrer">Continue on WhatsApp <span>↗</span></a></form><aside className="contact-details"><p className="eyebrow">Reach Hereni</p><h2>Simple, direct, personal.</h2><p>Public enquiries</p><a href={`tel:${PHONE.replace(/\s/g, '')}`}>{PHONE}</a><p>Catalogue orders</p><a href={WHATSAPP} target="_blank" rel="noreferrer">{ORDER_PHONE}</a><p>Instagram</p><a href={INSTAGRAM} target="_blank" rel="noreferrer">@hereni_jewellery</a><p>TikTok</p><a href={TIKTOK} target="_blank" rel="noreferrer">@hereni_jewellery</a><p>Based in</p><span>Nairobi, Kenya</span></aside></section></Layout> }
+function NotFoundPage() { return <Layout><section className="not-found shell"><p className="eyebrow">404</p><h1>That page slipped away.</h1><p>Let’s take you back to the collection.</p><Link className="button button-primary" to="/collection">Explore the collection →</Link></section></Layout> }
 
-  return <Layout>
-    <section className="page-hero shell"><p className="eyebrow">The collection</p><h1>A piece for every piercing story.</h1><p>Explore our collection themes below. Select a category to start a WhatsApp enquiry, or send a general message.</p></section>
-    <section className="shell collection-layout"><div className="collection-list">{collections.map((item, index) => <button className={`collection-row ${selected === item.name ? 'selected' : ''}`} key={item.name} onClick={() => setSelected(item.name === selected ? '' : item.name)} aria-pressed={selected === item.name}><span className="row-number">0{index + 1}</span><span><strong>{item.name}</strong><small>{item.note}</small></span><span className="row-arrow">↗</span></button>)}</div><aside className="enquiry-card"><p className="eyebrow">Your enquiry</p><h2>{selected || 'Start a conversation'}</h2><p>No checkout is completed on this site. Send your questions and Hereni will share the details you need on WhatsApp.</p><a className="button button-primary full-button" href={whatsappUrl} target="_blank" rel="noreferrer">Open WhatsApp enquiry <span>↗</span></a>{selected && <button className="clear-selection" onClick={() => setSelected('')}>Clear selection</button>}</aside></section>
-    <section className="material-band"><div className="shell material-inner"><p className="eyebrow">The finish</p><h2>Gold-plated. Sterling silver. Your choice.</h2><p>Hereni’s public collection features 18K gold-plated and sterling silver jewellery. Message us for the finish options currently available.</p><a className="text-link" href={`${WHATSAPP}?text=${encodeURIComponent('Hi Hereni Jewellery, which finishes are currently available?')}`} target="_blank" rel="noreferrer">Ask about finishes →</a></div></section>
-  </Layout>
-}
-
-function AboutPage() {
-  return <Layout><section className="page-hero shell"><p className="eyebrow">Hereni Jewellery</p><h1>Piercing jewellery with a personal touch.</h1><p>Hereni Jewellery is an online-based piercing jewellery brand based in Nairobi, Kenya.</p></section><section className="shell about-layout"><div className="about-art" role="img" aria-label="Abstract gold jewellery detail"><div className="about-ring"></div><div className="about-gem"></div></div><div className="about-copy"><p className="eyebrow">The short version</p><h2>A personal way to discover your next piece.</h2><p>Hereni shares 18K gold-plated and sterling silver jewellery for different piercing styles. Rather than pretending to offer a full online checkout, this site gives you a simple way to explore the collection and speak directly to the person behind it.</p><p>Have a question about a style, finish or placement? Reach Hereni on WhatsApp or Instagram and start there.</p><a className="button button-primary" href={WHATSAPP} target="_blank" rel="noreferrer">Start a conversation <span>↗</span></a></div></section></Layout>
-}
-
-function ContactPage() {
-  const [form, setForm] = useState({ name: '', message: '' })
-  const url = `${WHATSAPP}?text=${encodeURIComponent(`Hi Hereni Jewellery${form.name ? `, this is ${form.name}` : ''}. ${form.message || 'I would like to ask about your jewellery.'}`)}`
-  return <Layout><section className="page-hero shell"><p className="eyebrow">Contact</p><h1>Let’s talk jewellery.</h1><p>Use this form to prepare a WhatsApp message. It opens WhatsApp with your details ready to send — nothing is submitted to this website.</p></section><section className="shell contact-layout"><form className="enquiry-form" onSubmit={e => e.preventDefault()}><label htmlFor="name">Your name (optional)</label><input id="name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="How should Hereni address you?" /><label htmlFor="message">Your message</label><textarea id="message" rows="6" value={form.message} onChange={e => setForm({ ...form, message: e.target.value })} placeholder="Ask about a style, finish or placement…" /><a className="button button-primary" href={url} target="_blank" rel="noreferrer">Continue on WhatsApp <span>↗</span></a></form><aside className="contact-details"><p className="eyebrow">Reach Hereni</p><h2>Simple, direct, personal.</h2><p>Phone / WhatsApp</p><a href={WHATSAPP} target="_blank" rel="noreferrer">{PHONE}</a><p>Instagram</p><a href={INSTAGRAM} target="_blank" rel="noreferrer">@hereni_jewellery</a><p>TikTok</p><a href={TIKTOK} target="_blank" rel="noreferrer">@hereni_jewellery</a><p>Based in</p><span>Nairobi, Kenya</span></aside></section></Layout>
-}
-
-function NotFoundPage() {
-  return <Layout><section className="not-found shell"><p className="eyebrow">404</p><h1>That page slipped away.</h1><p>Let’s take you back to the collection.</p><Link className="button button-primary" to="/collection">Explore the collection →</Link></section></Layout>
-}
-
-export default function App() {
-  return <Routes><Route path="/" element={<HomePage />} /><Route path="/collection" element={<CollectionPage />} /><Route path="/about" element={<AboutPage />} /><Route path="/contact" element={<ContactPage />} /><Route path="*" element={<NotFoundPage />} /></Routes>
-}
+export default function App() { return <CartProvider><Routes><Route path="/" element={<HomePage />} /><Route path="/collection" element={<CollectionPage />} /><Route path="/product/:id" element={<ProductPage />} /><Route path="/about" element={<AboutPage />} /><Route path="/contact" element={<ContactPage />} /><Route path="*" element={<NotFoundPage />} /></Routes></CartProvider> }

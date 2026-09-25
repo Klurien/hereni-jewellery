@@ -23,30 +23,35 @@ try {
   await waitForServer()
   browser = await puppeteer.launch({ executablePath: chrome, headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] })
   const page = await browser.newPage()
+  await page.setViewport({ width: 1280, height: 900 })
   const errors = []
   page.on('console', message => { if (message.type() === 'error') errors.push(`console: ${message.text()}`) })
   page.on('pageerror', error => errors.push(`pageerror: ${error.message}`))
 
-  for (const route of ['/', '/collection', '/about', '/contact', '/not-a-real-page']) {
-    await page.goto(`${base}${route}`, { waitUntil: 'networkidle0' })
+  for (const route of ['/', '/collection', '/product/pia-flatback-gold', '/about', '/contact', '/not-a-real-page']) {
+    await page.goto(`${base}${route}`, { waitUntil: 'domcontentloaded' })
+    await wait(250)
     assert(await page.$('main'), `${route} did not render main content`)
   }
 
-  await page.goto(`${base}/collection`, { waitUntil: 'networkidle0' })
-  const firstCategory = await page.$('.collection-row')
-  assert(firstCategory, 'Collection categories did not render')
-  await firstCategory.click()
-  assert(await page.$eval('.enquiry-card h2', el => el.textContent.includes('Flatbacks')), 'Collection selection did not update enquiry card')
-  const whatsappHref = await page.$eval('.enquiry-card a', el => el.href)
-  assert(whatsappHref.startsWith('https://wa.me/254116047583?text='), 'Collection enquiry did not create a WhatsApp link')
+  await page.goto(`${base}/collection`, { waitUntil: 'domcontentloaded' })
+  await wait(250)
+  const productCards = await page.$$('.product-card')
+  assert(productCards.length >= 20, 'Expected catalogue product cards')
+  await page.click('.product-card .add-button')
+  await page.click('.cart-trigger')
+  assert(await page.$('.cart-drawer.open .drawer-item'), 'Cart did not open with the selected item')
+  const cartHref = await page.$eval('.cart-drawer.open .button-primary', el => el.href)
+  assert(cartHref.startsWith('https://wa.me/254794590908?text='), 'Cart did not create a WhatsApp order link')
 
-  await page.goto(`${base}/contact`, { waitUntil: 'networkidle0' })
+  await page.goto(`${base}/contact`, { waitUntil: 'domcontentloaded' })
+  await wait(250)
   await page.type('#name', 'Test Visitor')
   await page.type('#message', 'Please share your available pieces.')
   const contactHref = await page.$eval('.enquiry-form a', el => el.href)
   assert(contactHref.includes('Test%20Visitor'), 'Contact form did not prepare WhatsApp message')
   assert(errors.length === 0, `Browser errors:\n${errors.join('\n')}`)
-  console.log('Smoke passed: routes, collection enquiry, contact enquiry, and browser console.')
+  console.log('Smoke passed: routes, inventory cards, persistent cart, WhatsApp order, contact enquiry, and browser console.')
 } finally {
   if (browser) await browser.close()
   if (server) server.kill('SIGTERM')
