@@ -28,7 +28,7 @@ try {
   page.on('console', message => { if (message.type() === 'error') errors.push(`console: ${message.text()}`) })
   page.on('pageerror', error => errors.push(`pageerror: ${error.message}`))
 
-  for (const route of ['/', '/collection', '/product/pia-flatback-gold', '/about', '/contact', '/not-a-real-page']) {
+  for (const route of ['/', '/collection', '/product/pia-flatback-gold', '/about', '/contact', '/admin', '/not-a-real-page']) {
     await page.goto(`${base}${route}`, { waitUntil: 'domcontentloaded' })
     await wait(250)
     assert(await page.$('main'), `${route} did not render main content`)
@@ -50,6 +50,15 @@ try {
   await page.type('#message', 'Please share your available pieces.')
   const contactHref = await page.$eval('.enquiry-form a', el => el.href)
   assert(contactHref.includes('Test%20Visitor'), 'Contact form did not prepare WhatsApp message')
+
+  await page.goto(`${base}/admin`, { waitUntil: 'domcontentloaded' })
+  await wait(250)
+  assert(await page.$('.admin-shell'), 'Admin dashboard did not render')
+  await page.click('.admin-topbar .admin-primary')
+  await page.type('.admin-form input[placeholder="e.g. Tatu Flatback Gold"]', 'Preview Product')
+  await page.type('.admin-form input[type="number"]', '750')
+  await page.click('.admin-form .admin-primary')
+  assert(await page.$eval('.admin-table', el => el.textContent.includes('Preview Product')), 'Admin product create did not update the table')
   assert(errors.length === 0, `Browser errors:\n${errors.join('\n')}`)
   console.log('Smoke passed: routes, inventory cards, persistent cart, WhatsApp order, contact enquiry, and browser console.')
 } finally {
