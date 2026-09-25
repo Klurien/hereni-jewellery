@@ -4,8 +4,9 @@ import puppeteer from 'puppeteer-core'
 
 const chrome = process.env.CHROME_PATH || '/home/nova/.local/bin/google-chrome'
 const port = 4173
-const base = `http://127.0.0.1:${port}`
-const server = spawn('npm', ['run', 'preview', '--', '--host', '127.0.0.1', '--port', String(port)], { stdio: 'ignore' })
+const externalBase = process.env.BASE_URL
+const base = externalBase || `http://127.0.0.1:${port}`
+const server = externalBase ? null : spawn('npm', ['run', 'preview', '--', '--host', '127.0.0.1', '--port', String(port)], { stdio: 'ignore' })
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
 const assert = (condition, message) => { if (!condition) throw new Error(message) }
 
@@ -48,5 +49,5 @@ try {
   console.log('Smoke passed: routes, collection enquiry, contact enquiry, and browser console.')
 } finally {
   if (browser) await browser.close()
-  server.kill('SIGTERM')
+  if (server) server.kill('SIGTERM')
 }
