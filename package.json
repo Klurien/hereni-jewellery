@@ -9,7 +9,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "smoke": "npm run build && node scripts/smoke.mjs",
-    "test": "node --test tests/domain.test.js tests/delivery.test.js"
+    "test": "node --test \"tests/**/*.test.js\""
   },
   "dependencies": {
     "lucide-react": "^1.47.0",
