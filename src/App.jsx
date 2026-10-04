@@ -97,7 +97,9 @@ function Layout({ children }) {
   const location = useLocation()
   return <><Header key={location.pathname} /><main id="main">{children}</main><Footer /></>
 }
-function HomePage() { return <Layout><section className="hero shell"><div className="hero-copy"><p className="eyebrow">Hereni Jewellery · Nairobi</p><h1>Your piercing.<br /><em>Your signature.</em></h1><p className="hero-lede">Discover a considered collection of 18K gold-plated and sterling silver piercing jewellery. Find your piece, ask a question, and make it yours.</p><div className="actions"><Link className="button button-primary" to="/collection">Shop the collection <span>↗</span></Link><a className="button button-quiet" href={WHATSAPP} target="_blank" rel="noreferrer">Chat on WhatsApp</a></div><p className="hero-note">Availability and delivery details are confirmed directly on WhatsApp.</p></div><div className="hero-art" aria-label="Abstract gold jewellery illustration" role="img"><div className="orb orb-one"></div><div className="orb orb-two"></div><div className="ring ring-one"></div><div className="ring ring-two"></div><div className="gem"></div><span className="art-label">18K gold-plated<br />Sterling silver</span></div></section><section className="intro shell"><p className="eyebrow">A little more you</p><h2>Details that make the difference.</h2><div className="values"><article><span>01</span><h3>Made to layer</h3><p>Explore clean profiles and statement pieces to suit your own piercing routine.</p></article><article><span>02</span><h3>Ask before you choose</h3><p>Not sure about a placement, finish or size? Message Hereni for personal guidance.</p></article><article><span>03</span><h3>Shop your way</h3><p>Build a bag here, then complete your enquiry directly on WhatsApp.</p></article></div></section><section className="ig-strip shell"><div><p className="eyebrow">From the Hereni feed</p><h2>See the details behind the pieces.</h2><p>Hereni’s Instagram features titanium jewellery, flatbacks, ear charms and nose jewellery. Browse the catalogue, then ask for the piece that fits your piercing.</p><a className="text-link" href={INSTAGRAM} target="_blank" rel="noreferrer">Follow @hereni_jewellery →</a></div><div className="ig-images"><img src="/images/hereni-profile.jpg" alt="Hereni Jewellery Instagram profile" /><img src="/images/hereni-anatomy.jpg" alt="Hereni Jewellery threadless flatback guide" /></div></section><section className="collection-teaser"><div className="shell"><div className="section-heading"><div><p className="eyebrow">The collection</p><h2>Find your next favourite.</h2></div><Link className="text-link" to="/collection">View all pieces →</Link></div><div className="collection-preview">{products.slice(0, 3).map(product => <Link to={`/product/${product.id}`} className="preview-card" key={product.id}><ProductVisual kind={product.art} image={product.image} /><div><p>{product.name}</p><span>KES {product.price.toLocaleString()} <b>↗</b></span></div></Link>)}</div></div></section><section className="contact-ribbon shell"><div><p className="eyebrow">Need a hand?</p><h2>Let’s find the right piece together.</h2><p>Ask about availability, finishes or how to style an existing piercing.</p></div><a className="button button-light" href={WHATSAPP} target="_blank" rel="noreferrer">Message {ORDER_PHONE} <span>↗</span></a></section></Layout> }
+const MARQUEE_ITEMS = ['Titanium', 'Sterling Silver', '18K Gold-Plated', 'Threadless Flatbacks', 'Clickers', 'Ballbacks', 'Kimathi House 3rd Floor Shop G4', 'Nairobi']
+
+function HomePage() { return <Layout><div className="marquee" aria-hidden="true"><div className="marquee-track">{[0, 1].map(copy => <span key={copy} style={{ display: 'contents' }}>{MARQUEE_ITEMS.map(item => <span key={item}>{item} · </span>)}{' '}</span>)}</div></div><section className="hero shell"><div className="hero-copy"><p className="eyebrow">Hereni Jewellery · Nairobi</p><h1>Your piercing.<br /><em>Your signature.</em></h1><p className="hero-lede">Discover a considered collection of 18K gold-plated and sterling silver piercing jewellery. Find your piece, ask a question, and make it yours.</p><div className="actions"><Link className="button button-primary" to="/collection">Shop the collection <span>↗</span></Link><a className="button button-quiet" href={WHATSAPP} target="_blank" rel="noreferrer">Chat on WhatsApp</a></div><p className="hero-note">Availability and delivery details are confirmed directly on WhatsApp.</p><div className="hero-info-bar"><span><b>Pickup</b> Kimathi House, 3rd Floor Shop G4</span><span><b>Delivery</b> Across Nairobi — rate on request</span><span><b>Enquiries</b> via WhatsApp</span></div></div><div className="hero-art" aria-label="Abstract gold jewellery illustration" role="img"><div className="orb orb-one"></div><div className="orb orb-two"></div><div className="ring ring-one"></div><div className="ring ring-two"></div><div className="gem"></div><span className="art-label">18K gold-plated<br />Sterling silver</span></div></section><section className="intro shell"><p className="eyebrow">A little more you</p><h2>Details that make the difference.</h2><div className="values"><article><span>01</span><h3>Made to layer</h3><p>Explore clean profiles and statement pieces to suit your own piercing routine.</p></article><article><span>02</span><h3>Ask before you choose</h3><p>Not sure about a placement, finish or size? Message Hereni for personal guidance.</p></article><article><span>03</span><h3>Shop your way</h3><p>Build a bag here, then complete your enquiry directly on WhatsApp.</p></article></div></section><section className="ig-strip shell"><div><p className="eyebrow">From the Hereni feed</p><h2>See the details behind the pieces.</h2><p>Hereni’s Instagram features titanium jewellery, flatbacks, ear charms and nose jewellery. Browse the catalogue, then ask for the piece that fits your piercing.</p><a className="text-link" href={INSTAGRAM} target="_blank" rel="noreferrer">Follow @hereni_jewellery →</a></div><div className="ig-images"><img src="/images/hereni-profile.jpg" alt="Hereni Jewellery Instagram profile" /><img src="/images/hereni-anatomy.jpg" alt="Hereni Jewellery threadless flatback guide" /></div></section><section className="collection-teaser"><div className="shell"><div className="section-heading"><div><p className="eyebrow">The collection</p><h2>Find your next favourite.</h2></div><Link className="text-link" to="/collection">View all pieces →</Link></div><div className="collection-preview">{products.slice(0, 3).map(product => <Link to={`/product/${product.id}`} className="preview-card" key={product.id}><ProductVisual kind={product.art} image={product.image} /><div><p>{product.name}</p><span>KES {product.price.toLocaleString()} <b>↗</b></span></div></Link>)}</div></div></section><section className="contact-ribbon shell"><div><p className="eyebrow">Need a hand?</p><h2>Let’s find the right piece together.</h2><p>Ask about availability, finishes or how to style an existing piercing.</p></div><a className="button button-light" href={WHATSAPP} target="_blank" rel="noreferrer">Message {ORDER_PHONE} <span>↗</span></a></section></Layout> }
 
 function ProductCard({ product }) { const { add } = useCart(); return <article className="product-card"><Link to={`/product/${product.id}`} className="product-card-image"><ProductVisual kind={product.art} image={product.image} /></Link><div className="product-card-body"><div><p className="product-category">{product.category}</p><Link to={`/product/${product.id}`}><h2>{product.name}</h2></Link></div><strong>KES {product.price.toLocaleString()}</strong></div><button className="add-button" onClick={() => add(product)}>Add to bag <span>+</span></button></article> }
 
@@ -126,42 +128,14 @@ function CollectionPage() {
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
           placeholder="Search pieces..."
-          style={{
-            flex: '1',
-            padding: '8px 12px',
-            border: '1px solid #d3ccbf',
-            background: '#fbfaf7',
-            font: '12px var(--sans)',
-            color: '#28251f',
-            borderRadius: '4px',
-            minWidth: '200px',
-          }}
+          className="catalogue-search-input"
           aria-label="Search products"
         />
       </div>
-      {error && <p style={{ color: '#3e6340', fontSize: '12px', marginTop: '8px' }}>{error}</p>}
-      <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
-        {categories.map(item => (
-          <button
-            key={item}
-            className={category === item ? 'active' : ''}
-            onClick={() => setCategory(item)}
-            style={{
-              padding: '6px 12px',
-              fontSize: '11px',
-              border: '1px solid #e3ded4',
-              background: category === item ? '#e8dfcf' : 'transparent',
-              borderRadius: '4px',
-            }}
-            aria-label={`Filter by ${item}`}
-          >
-            {item}
-          </button>
-        ))}
-      </div>
+      {error && <p className="catalogue-search-error">{error}</p>}
 
       {/* Delivery Calculator */}
-      <div className="delivery-calculator-section" style={{ marginBottom: '24px', padding: '16px', background: '#fbfaf7', border: '1px solid #e3ded4', borderRadius: '8px' }}>
+      <div className="delivery-calculator-section">
         <DeliveryCalculator
           value={deliveryArea}
           onChange={setDeliveryArea}
@@ -169,9 +143,9 @@ function CollectionPage() {
           className="collection-delivery-calculator"
         />
         {deliveryArea && deliveryStatus.status === 'priced' && (
-          <p className="delivery-preview-note" style={{ marginTop: '8px', fontSize: '13px', color: '#28251f' }}>
+          <p className="delivery-preview-note">
             <strong>Estimated delivery to {deliveryArea}: ≈ KES {deliveryEstimate.toLocaleString()}</strong>
-            <br /><small style={{ color: '#8b857a' }}>Prices may vary depending on parcel size & weight. Final amount confirmed on WhatsApp.</small>
+            <br /><small>Prices may vary depending on parcel size &amp; weight. Final amount confirmed on WhatsApp.</small>
           </p>
         )}
       </div>
