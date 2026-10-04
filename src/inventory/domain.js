@@ -54,7 +54,7 @@ function PurchaseOrderLine_availableToReceive(line) {
 /** User role simulation — client-side only, NOT authentication
  * @type {('owner'|'admin'|'manager'|'staff'|'customer')}
  */
-const Role_type = 'owner' | 'admin' | 'manager' | 'staff' | 'customer'
+const _Role_type = 'owner' | 'admin' | 'manager' | 'staff' | 'customer'
 
 /** Permission check: can(role, action)
  * @param {string} role
@@ -184,7 +184,6 @@ function applyAdjustment(quant, delta, reason, actor, idempotencyKey, currentVer
   // Apply the adjustment
   const _newReserved = quant.reserved // reserved unchanged by generic delta
   const newOnHandVal = newOnHand
-  const newAfter = newOnHandVal - quant.reserved // available after
 
   // Build new quant with incremented version
   const newQuant = {
@@ -325,12 +324,10 @@ function receivePO(quant, qty, sku, locationId, actor, currentVersion) {
 }
 
 // Export the public API
-module.exports = {
-  StockQuant: StockQuant_create,
-  AuditEntry,
-  ReorderRule: ReorderRule_validate,
-  PurchaseOrderLine: PurchaseOrderLine_availableToReceive,
-  Role: Role_type,
+export {
+  StockQuant_create as StockQuant,
+  ReorderRule_validate as ReorderRule,
+  PurchaseOrderLine_availableToReceive as PurchaseOrderLine,
   can,
   transitionStockMove,
   DomainError,

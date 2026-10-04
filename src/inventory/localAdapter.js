@@ -11,11 +11,8 @@
 
 import { products as seedProducts } from '../data/products.js'
 import {
-  assertAdapter, DomainError, AuditEntry, StockQuant,
-  ReorderRule, PurchaseOrder, PurchaseOrderLine, Role, can,
+  DomainError,
   suggestOrderQty, validateReorderRule, validatePOLine,
-  receivePO as domainReceivePO, reserveStock as domainReserveStock,
-  releaseReservation as domainReleaseReservation
 } from './domain.js'
 
 const STORAGE_KEY = 'hereni-inventory-v1'
@@ -106,7 +103,7 @@ const initialState = () => {
     .map(q => q.sku)
 
   lowStockSkus.forEach((sku, idx) => {
-    const rule = seededReorderRules[sku] || { min: 2, max: 8 }
+    const _rule = seededReorderRules[sku] || { min: 2, max: 8 }
     draftPOLines.push({
       id: `pol-${idx}`,
       sku,
@@ -147,15 +144,36 @@ const getState = () => {
   if (cachedState) return cachedState
   const stored = localStorage.getItem(STORAGE_KEY)
   if (stored) {
-    cachedState = { ...initialState(), ...JSON.parse(stored) }
+    const parsed = JSON.parse(stored)
+    // Handle both old format (products as empty object {}) and new format (products as array of entries)
+    const productsEntries = Array.isArray(parsed.products) ? parsed.products : []
+    const adjustmentKeysEntries = Array.isArray(parsed.appliedAdjustmentKeys) ? parsed.appliedAdjustmentKeys : []
+    const suppliersEntries = Array.isArray(parsed.suppliers) ? parsed.suppliers : []
+    const reorderRulesEntries = parsed.reorderRules && typeof parsed.reorderRules === 'object' ? Object.entries(parsed.reorderRules) : []
+    cachedState = {
+      ...initialState(),
+      ...parsed,
+      products: new Map(productsEntries),
+      appliedAdjustmentKeys: new Map(adjustmentKeysEntries),
+      suppliers: new Map(suppliersEntries),
+      reorderRules: Object.fromEntries(reorderRulesEntries),
+    }
     // Ensure all product tags are arrays after rehydration
-    cachedState.products.forEach((p, key) => {
-      if (Array.isArray(p.tags)) return
-      cachedState.products.set(key, { ...p, tags: [p.tags] })
-    })
+    if (cachedState.products && typeof cachedState.products.forEach === 'function') {
+      cachedState.products.forEach((p, key) => {
+        if (Array.isArray(p.tags)) return
+        cachedState.products.set(key, { ...p, tags: [p.tags] })
+      })
+    }
   } else {
     cachedState = initialState()
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(cachedState))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      ...cachedState,
+      products: Array.from(cachedState.products.entries()),
+      appliedAdjustmentKeys: Array.from(cachedState.appliedAdjustmentKeys.entries()),
+      suppliers: Array.from(cachedState.suppliers.entries()),
+      reorderRules: Object.entries(cachedState.reorderRules || {}),
+    }))
     localStorage.setItem(PRODUCTS_KEY, JSON.stringify(Array.from(cachedState.products.values())))
   }
   return cachedState
@@ -163,7 +181,14 @@ const getState = () => {
 
 /** Persist state to localStorage */
 const persistState = (state) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+  const serializableState = {
+    ...state,
+    products: Array.from(state.products.entries()), // Store as [key, value] pairs
+    appliedAdjustmentKeys: Array.from(state.appliedAdjustmentKeys.entries()),
+    suppliers: Array.from(state.suppliers.entries()),
+    reorderRules: Object.entries(state.reorderRules || {}),
+  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(serializableState))
   localStorage.setItem(PRODUCTS_KEY, JSON.stringify(Array.from(state.products.values())))
 }
 
@@ -330,7 +355,6 @@ const adjustStock = async (sku, locationId, delta, reason, actor, idempotencyKey
   }
 
   // Use domain function for invariant‑checked adjustment
-  const result = domainReceivePO ? undefined : null
   // Actually, let's use the applyAdjustment from domain.js directly logic
   // Compute new onHand
   const newOnHand = q.onHand + delta
@@ -343,7 +367,7 @@ const adjustStock = async (sku, locationId, delta, reason, actor, idempotencyKey
   }
 
   // Apply adjustment
-  const newReserved = q.reserved // reserved unchanged by generic delta
+  const _newReserved = q.reserved // reserved unchanged by generic delta
   const newQuant = {
     ...q,
     onHand: newOnHand,
@@ -559,7 +583,7 @@ const receivePOadapter = async (poId, actor) => {
   const updatedLines = po.lines.map(line => {
     const qtyReceived = line.qtyReceived + 1
     // Use domain receivePO to validate and compute new quant
-      const dr = { onHand: state.quants[`${line.sku}:${LOCATIONS.SHOP}`]?.onHand || 0, version: 1, reserved: 0, sku: line.sku, locationId: LOCATIONS.SHOP }
+      const _dr = { onHand: state.quants[`${line.sku}:${LOCATIONS.SHOP}`]?.onHand || 0, version: 1, reserved: 0, sku: line.sku, locationId: LOCATIONS.SHOP }
     // Actually, just compute inline:
     const qKey = `${line.sku}:${LOCATIONS.SHOP}`
     const qBefore = state.quants[qKey]
@@ -628,7 +652,7 @@ export const localAdapter = {
 // Export utilities for use by other modules (e.g., admin UI)
 export {
   STORAGE_KEY, AUDIT_KEY, VERSION, LOCATIONS,
-  DomainError, AuditEntry, StockQuant, ReorderRule, PurchaseOrder, PurchaseOrderLine,
-  Role, can, suggestOrderQty, validateReorderRule, validatePOLine,
+  DomainError,
+  suggestOrderQty, validateReorderRule, validatePOLine,
   seedQuantity, quantKey, ensureQuant,
 }

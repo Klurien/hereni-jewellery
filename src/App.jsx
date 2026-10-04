@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { Link, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import { products, categories } from './data/products'
-import { AdminPage } from './pages/AdminPage'
+import { AdminPage } from './pages/admin/AdminPage'
 import { useSearch } from './search/useSearch'
 import './styles.css'
 
@@ -44,8 +44,6 @@ function Header() {
   const [open, setOpen] = useState(false)
   const [cartOpen, setCartOpen] = useState(false)
   const { items, count, total, _remove, change, clear } = useCart()
-  const location = useLocation()
-  useEffect(() => { setOpen(false); setCartOpen(false) }, [location.pathname])
   const enquiry = `Hi Hereni Jewellery, I'd like to order:\n${items.map(item => `• ${item.name} × ${item.quantity} — KES ${(item.price * item.quantity).toLocaleString()}`).join('\n')}\n\nTotal: KES ${total.toLocaleString()}`
   const checkout = `${WHATSAPP}?text=${encodeURIComponent(enquiry)}`
   return <>
@@ -57,28 +55,22 @@ function Header() {
 }
 
 function Footer() { return <footer className="site-footer"><div className="shell footer-grid"><div><Link to="/" className="wordmark footer-mark"><span className="wordmark-mark"><Sparkle /></span><span>Hereni <b>Jewellery</b></span></Link><p>Piercing jewellery for your everyday story. Based in Nairobi, Kenya.</p></div><div><h2>Explore</h2><Link to="/collection">Shop all pieces</Link><Link to="/about">Our story</Link><Link to="/contact">Contact</Link></div><div><h2>Say hello</h2><a href={WHATSAPP} target="_blank" rel="noreferrer">WhatsApp {ORDER_PHONE}</a><a href={INSTAGRAM} target="_blank" rel="noreferrer">Instagram @hereni_jewellery</a><a href={TIKTOK} target="_blank" rel="noreferrer">TikTok @hereni_jewellery</a></div></div><div className="shell footer-bottom"><span>© {new Date().getFullYear()} Hereni Jewellery</span><span>Piercing jewellery, Nairobi</span></div></footer> }
-function Layout({ children }) { return <><Header /><main id="main">{children}</main><Footer /></> }
+function Layout({ children }) {
+  const location = useLocation()
+  return <><Header key={location.pathname} /><main id="main">{children}</main><Footer /></>
+}
 function HomePage() { return <Layout><section className="hero shell"><div className="hero-copy"><p className="eyebrow">Hereni Jewellery · Nairobi</p><h1>Your piercing.<br /><em>Your signature.</em></h1><p className="hero-lede">Discover a considered collection of 18K gold-plated and sterling silver piercing jewellery. Find your piece, ask a question, and make it yours.</p><div className="actions"><Link className="button button-primary" to="/collection">Shop the collection <span>↗</span></Link><a className="button button-quiet" href={WHATSAPP} target="_blank" rel="noreferrer">Chat on WhatsApp</a></div><p className="hero-note">Availability and delivery details are confirmed directly on WhatsApp.</p></div><div className="hero-art" aria-label="Abstract gold jewellery illustration" role="img"><div className="orb orb-one"></div><div className="orb orb-two"></div><div className="ring ring-one"></div><div className="ring ring-two"></div><div className="gem"></div><span className="art-label">18K gold-plated<br />Sterling silver</span></div></section><section className="intro shell"><p className="eyebrow">A little more you</p><h2>Details that make the difference.</h2><div className="values"><article><span>01</span><h3>Made to layer</h3><p>Explore clean profiles and statement pieces to suit your own piercing routine.</p></article><article><span>02</span><h3>Ask before you choose</h3><p>Not sure about a placement, finish or size? Message Hereni for personal guidance.</p></article><article><span>03</span><h3>Shop your way</h3><p>Build a bag here, then complete your enquiry directly on WhatsApp.</p></article></div></section><section className="ig-strip shell"><div><p className="eyebrow">From the Hereni feed</p><h2>See the details behind the pieces.</h2><p>Hereni’s Instagram features titanium jewellery, flatbacks, ear charms and nose jewellery. Browse the catalogue, then ask for the piece that fits your piercing.</p><a className="text-link" href={INSTAGRAM} target="_blank" rel="noreferrer">Follow @hereni_jewellery →</a></div><div className="ig-images"><img src="/images/hereni-profile.jpg" alt="Hereni Jewellery Instagram profile" /><img src="/images/hereni-anatomy.jpg" alt="Hereni Jewellery threadless flatback guide" /></div></section><section className="collection-teaser"><div className="shell"><div className="section-heading"><div><p className="eyebrow">The collection</p><h2>Find your next favourite.</h2></div><Link className="text-link" to="/collection">View all pieces →</Link></div><div className="collection-preview">{products.slice(0, 3).map(product => <Link to={`/product/${product.id}`} className="preview-card" key={product.id}><ProductVisual kind={product.art} image={product.image} /><div><p>{product.name}</p><span>KES {product.price.toLocaleString()} <b>↗</b></span></div></Link>)}</div></div></section><section className="contact-ribbon shell"><div><p className="eyebrow">Need a hand?</p><h2>Let’s find the right piece together.</h2><p>Ask about availability, finishes or how to style an existing piercing.</p></div><a className="button button-light" href={WHATSAPP} target="_blank" rel="noreferrer">Message {ORDER_PHONE} <span>↗</span></a></section></Layout> }
 
 function ProductCard({ product }) { const { add } = useCart(); return <article className="product-card"><Link to={`/product/${product.id}`} className="product-card-image"><ProductVisual kind={product.art} image={product.image} /></Link><div className="product-card-body"><div><p className="product-category">{product.category}</p><Link to={`/product/${product.id}`}><h2>{product.name}</h2></Link></div><strong>KES {product.price.toLocaleString()}</strong></div><button className="add-button" onClick={() => add(product)}>Add to bag <span>+</span></button></article> }
 
 function CollectionPage() {
   const [category, setCategory] = useState('All pieces')
-  const [searchQuery, setSearchQuery] = useState('')
-  const { results: _searchResults, mode, loading, error, canUseAi } = useSearch(products, searchQuery)
+  const { results, loading, error, searchQuery, setSearchQuery } = useSearch(products, '')
 
-  // Combined filter: category AND search
-  const filteredByCategory = category === 'All pieces' ? products : products.filter(product => product.category === category)
-  const filtered = searchQuery
-    ? filteredByCategory.filter(p =>
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (p.material && p.material.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (p.piercingSite && p.piercingSite.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (Array.isArray(p.tags) && p.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()))) ||
-        (p.description && p.description.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
-    : filteredByCategory
+  // Combined filter: category AND search (results already filtered by search query)
+  const filtered = category === 'All pieces'
+    ? results.map(r => r.product)
+    : results.map(r => r.product).filter(product => product.category === category)
 
   // Result count
   const resultCount = filtered.length
@@ -103,17 +95,13 @@ function CollectionPage() {
             font: '12px var(--sans)',
             color: '#28251f',
             borderRadius: '4px',
-            '@media (max-width: 320px)': { width: '100%', fontSize: '12px' }
+            minWidth: '200px',
           }}
           aria-label="Search products"
         />
-        {canUseAi && <button style={{ padding: '8px 12px', background: '#e8dfcf', border: '1px solid #ccc5b8', borderRadius: '4px', fontSize: '11px' }} onClick={() => setCanUseAi(!canUseAi)}>
-          AI search
-        </button>}
-        {!canUseAi && <span style={{ padding: '8px 12px', background: '#f0ece4', border: '1px solid #ccc5b8', borderRadius: '4px', fontSize: '11px', color: '#8b857a' }}>basic</span>}
       </div>
-      {error && <p style={{ color: '#3e6340', fontSize: '12px', marginTop: '8' }}>AI search unavailable — showing keyword results</p>}
-      <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
+      {error && <p style={{ color: '#3e6340', fontSize: '12px', marginTop: '8px' }}>{error}</p>}
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
         {categories.map(item => (
           <button
             key={item}
@@ -137,7 +125,7 @@ function CollectionPage() {
     <section className="shell catalogue-layout">
       <div className="catalogue-main">
         {loading && <p>Loading search results...</p>}
-        {mode === 'error' && <p style={{ color: '#3e6340' }}>AI search unavailable — showing keyword results</p>}
+        {error && !loading && <p style={{ color: '#3e6340' }}>{error}</p>}
 
         <div className="filter-row" aria-label="Filter products">
           {categories.map(item => (

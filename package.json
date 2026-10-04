@@ -9,12 +9,11 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "smoke": "npm run build && node scripts/smoke.mjs",
-    "test": "node tests/domain.test.js",
-    "embeddings": "node scripts/build-embeddings.mjs"
+    "test": "node tests/domain.test.js"
   },
   "dependencies": {
-    "@huggingface/transformers": "^4.3.0",
     "lucide-react": "^1.47.0",
+    "postgres": "^3.4.9",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.4"

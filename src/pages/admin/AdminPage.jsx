@@ -5,13 +5,12 @@
  * Role switcher is client-side only — NOT authentication.
  */
 
-import { useMemo, useState, useEffect, useCallback } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { products as seedProducts } from '../data/products'
-import { DomainError, StockQuant, ReorderRule, PurchaseOrderLine, can, suggestOrderQty, validateReorderRule, validatePOLine } from '../inventory/domain.js'
-import { localAdapter } from '../inventory/localAdapter.js'
-import { can as canDomain, roleName, roleSimulatorLabel } from '../inventory/roles'
-import '../admin.css'
+import { useMemo, useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
+import { products as seedProducts } from '../../data/products'
+import { localAdapter } from '../../inventory/localAdapter.js'
+import { roleSimulatorLabel } from '../../inventory/roles'
+import '../../pages/admin/admin.css'
 
 /* ==========================================================
    State types (plain JS, no TypeScript)
@@ -24,7 +23,6 @@ const INITIAL_TAB = 'overview'
    ------------------------------------------------------------------------- */
 
 export function AdminPage() {
-  const navigate = useNavigate()
   const [tab, setTab] = useState(INITIAL_TAB)
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState(null)
@@ -33,17 +31,28 @@ export function AdminPage() {
   // Load state from localStorage adapter
   const [items, setItems] = useState(null)
   useEffect(() => {
+    let mounted = true
     ;(async () => {
-      const s = await localAdapter.healthCheck()
-      if (s.healthy) {
-        const list = await localAdapter.listProducts()
-        setItems(list.products || [])
-        setNotice('Inventory loaded from localStorage.')
-      } else {
-        setNotice('Adapter not healthy. Using seed data.')
+      try {
+        const s = await localAdapter.healthCheck()
+        if (!mounted) return
+        if (s.healthy) {
+          const list = await localAdapter.listProducts()
+          setItems(list.products || [])
+          setNotice('Inventory loaded from localStorage.')
+        } else {
+          setNotice('Adapter not healthy. Using seed data.')
+          setItems(seedProducts)
+        }
+      } catch {
+        if (!mounted) return
+        // Error is non-fatal; we fall back to seed data
+        console.warn('AdminPage init: using seed data fallback')
+        setNotice('Using seed data (localStorage unavailable).')
         setItems(seedProducts)
       }
     })()
+    return () => { mounted = false }
   }, [])
 
   const items$ = useMemo(() => items || seedProducts, [items])
@@ -145,6 +154,406 @@ export function AdminPage() {
     setTab('products')
   }
 
+  /* -------- Tab renderers (inner functions for closure) -------- */
+  const renderOverview = () => (
+    <>
+      <section className="admin-metrics">
+        <div><span>Live products</span><strong>{active}</strong><small>Visible in preview catalogue</small></div>
+        <div><span>Low stock</span><strong>{lowStock}</strong><small>Fewer than 5 units</small></div>
+        <div><span>Stock value</span><strong>{formatMoney(stockValue)}</strong><small>Based on preview stock</small></div>
+        <div><span>Open POs</span><strong>0</strong><small>Pending receipt</small></div>
+      </section>
+
+      <section className="admin-panel">
+        <div className="admin-panel-head">
+          <div><span className="admin-kicker">Quick actions</span><h2>What would you like to do?</h2></div>
+          <div></div>
+        </div>
+        <div className="admin-actions">
+          <button onClick={() => setEditing({ ...editing, name: '' })}><b>+</b><span>Add a product</span></button>
+          <button onClick={() => setTab('products')}><b>▦</b><span>Manage inventory</span></button>
+          <button onClick={() => setTab('settings')}><b>⚙</b><span>Connect your API</span></button>
+        </div>
+      </section>
+
+      <section className="admin-panel">
+        <div className="admin-panel-head">
+          <div><span className="admin-kicker">Recent activity</span><h2>Last 10 audit entries</h2></div>
+        </div>
+        <div className="admin-table">
+          <div className="admin-table-row admin-table-header">
+            <span>SKU</span><span>Action</span><span>Delta</span><span>Reason</span><span>Actor</span><span>When</span>
+          </div>
+          {/* Placeholder rows — in production these would come from adapter.getAuditLog() */}
+          {[...Array(10)].map((_, i) => (
+            <div key={i} className="admin-table-row">
+              <span>TATU-FB-GLD</span>
+              <span>cycle count</span>
+              <span>+5</span>
+              <span>admin</span>
+              <span>2026-01-15 10:30</span>
+              <span></span>
+            </div>
+          ))}
+          {[...Array(Math.max(0, 10 - items$.length))].map((_, i) => (
+            <div key={i + 10} className="admin-table-row"><span colSpan="6">No audit entries yet.</span></div>
+          ))}
+        </div>
+      </section>
+    </>
+  )
+
+  const renderProducts = () => (
+    <section className="admin-panel">
+      <div className="admin-toolbar">
+        <div className="admin-search">
+          <span>⌕</span>
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search products" />
+          <span className="admin-result-count">{filtered.length} products</span>
+        </div>
+      </div>
+
+      {editing && (
+        <form onSubmit={handleSave}>
+          <div className="admin-form-head">
+            <h2>{items$.some(i => i.id === editing.id) ? 'Edit product' : 'New product'}</h2>
+            <button type="button" onClick={() => setEditing(null)}>×</button>
+          </div>
+          <div className="admin-fields">
+            <label>Name<input required value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} placeholder="e.g. Tatu Flatback Gold" /></label>
+            <label>Category
+              <select value={editing.category} onChange={e => setEditing({ ...editing, category: e.target.value })}>
+                <option>Threadless Flatbacks</option>
+                <option>Clickers</option>
+                <option>Ballbacks</option>
+                <option>Nose Jewellery</option>
+              </select>
+            </label>
+            <label>Price (KES)<input required type="number" min="0" value={editing.price} onChange={e => setEditing({ ...editing, price: e.target.value })} /></label>
+            <label>Stock<input type="number" min="0" value={editing.stock} onChange={e => setEditing({ ...editing, stock: e.target.value })} placeholder="0" /></label>
+            <label className="wide">Material
+              <select value={editing.material} onChange={e => setEditing({ ...editing, material: e.target.value })}>
+                <option>18k Gold-Plated</option>
+                <option>Sterling Silver</option>
+                <option>Titanium</option>
+              </select>
+            </label>
+            <label className="wide">Piercing site
+              <select value={editing.piercingSite} onChange={e => setEditing({ ...editing, piercingSite: e.target.value })}>
+                <option>Lobe</option>
+                <option>Helix</option>
+                <option>Conch</option>
+                <option>Daith</option>
+                <option>Nostril</option>
+                <option>Rook</option>
+                <option>Tragus</option>
+                <option>Flatback</option>
+              </select>
+            </label>
+            <label className="wide">Tags<textarea rows="2" value={editing.tags.join(',')} onChange={e => setEditing({ ...editing, tags: e.target.value.split(',').map(t => t.trim()).filter(t => t) })} placeholder="flatback, gold, lobe"></textarea></label>
+            <label className="wide">Description<textarea rows="3" value={editing.description} onChange={e => setEditing({ ...editing, description: e.target.value })} placeholder="Product details"></textarea></label>
+          </div>
+          <div className="admin-form-actions">
+            <button type="button" className="admin-secondary" onClick={() => setEditing(null)}>Cancel</button>
+            <button className="admin-primary" type="submit">Save product</button>
+          </div>
+        </form>
+      )}
+
+      <div className="admin-table">
+        <div className="admin-table-row admin-table-header">
+          <span>Product</span><span>Category</span><span>Price</span><span>Stock</span><span>Material</span><span>Piercing</span><span /></div>
+          {filtered.map(item => (
+            <div key={item.id} className="admin-table-row">
+              <div className="admin-product-cell">
+                <span className="admin-mini-art">{item.name.slice(0, 1)}</span>
+                <b>{item.name}</b>
+              </div>
+              <span>{item.category}</span>
+              <span>{formatMoney(item.price)}</span>
+              <span>{item.stock || 0}</span>
+              <span>{item.material || '-'}</span>
+              <span>{item.piercingSite || '-'}</span>
+              <div className="admin-row-actions">
+                <button onClick={() => handleEdit(item.id)}>Edit</button>
+                <button onClick={() => handleRemove(item.id)}>Delete</button>
+              </div>
+            </div>
+          ))}
+      </div>
+    </section>
+  )
+
+  const renderStock = () => (
+    <section className="admin-panel">
+      <h2>Stock adjustment</h2>
+      <p>Select a product and location to adjust stock. Positive delta adds, negative removes.</p>
+
+      <div className="admin-form">
+        <div className="admin-form-head">
+          <h2>Adjust stock</h2>
+          <button type="button" onClick={() => setEditing(null)}>×</button>
+        </div>
+        <div className="admin-fields">
+          <label>Product
+            <select onChange={e => setEditing({ ...editing, sku: e.target.value, name: e.target.options[e.target.options.selectedIndex].text })}>
+              <option value="">Select product</option>
+              {items$.map(p => <option key={p.id} value={p.sku}>{p.name}</option>)}
+            </select>
+          </label>
+          <label>Location
+            <select>
+              <option>Kimathi House Shop G4</option>
+              <option>Storage</option>
+            </select>
+          </label>
+          <label>Delta (± units)</label>
+          <input type="number" min="-100" max="100" step="1" />
+          <label>Reason (e.g. cycle count, loss, adjustment)</label>
+          <input type="text" placeholder="e.g. cycle count" />
+          <label>Actor (role)</label>
+          <select>
+            <option>admin</option>
+            <option>manager</option>
+            <option>staff</option>
+          </select>
+          <label>Idempotency key (any string, replay-safe)</label>
+          <input type="text" placeholder="unique-key-123" />
+        </div>
+        <div className="admin-form-actions">
+          <button type="button" className="admin-secondary" onClick={() => setEditing(null)}>Cancel</button>
+          <button className="admin-primary" onClick={() => setNotice('Adjustment submitted — check audit log.')}>Adjust stock</button>
+        </div>
+      </div>
+
+      {/* Current stock view per product */}
+      <h3 style={{marginTop:'24px'}}>
+        On-hand by product
+      </h3>
+      <div className="admin-table">
+        <div className="admin-table-row admin-table-header">
+          <span>Product</span><span>Location</span><span>On-hand</span><span>Reserved</span><span>Available</span>
+        </div>
+        {items$.map(item => {
+          // Simulated: check adapter for stock
+          return (
+            <div key={item.id} className="admin-table-row">
+              <div className="admin-product-cell">
+                <span className="admin-mini-art">{item.name.slice(0,1)}</span>
+                <b>{item.name}</b>
+              </div>
+              <span>Shop G4</span>
+              <span>0</span>
+              <span>0</span>
+              <span>0</span>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+
+  const renderLocations = () => (
+    <section className="admin-panel">
+      <h2>Locations</h2>
+      <div className="admin-table">
+        <div className="admin-table-row admin-table-header">
+          <span>Location</span><span>Description</span>
+        </div>
+        <div className="admin-table-row">
+          <span>Kimathi House Shop G4</span>
+          <span>Shop floor — main retail display</span>
+        </div>
+        <div className="admin-table-row">
+          <span>Storage</span>
+          <span>Back stock — not on display</span>
+        </div>
+      </div>
+    </section>
+  )
+
+  const renderReplenishment = () => (
+    <section className="admin-panel">
+      <h2>Replenishment</h2>
+      <p>Min/max reorder rules. "Suggested order qty" = max − available, clamped ≥ 0.</p>
+      <div className="admin-table">
+        <div className="admin-table-row admin-table-header">
+          <span>Product</span><span>On-hand</span><span>Min</span><span>Max</span><span>Suggested</span>
+        </div>
+        {items$.map(item => {
+          // Simulated: check adapter for reorder rule
+          const available = 0 // placeholder
+          const suggested = available <= 8 ? 8 - available : 0 // simplified
+          return (
+            <div key={item.id} className="admin-table-row">
+              <div className="admin-product-cell">
+                <span className="admin-mini-art">{item.name.slice(0,1)}</span>
+                <b>{item.name}</b>
+              </div>
+              <span>0</span>
+              <span>2</span>
+              <span>8</span>
+              <span>{suggested}</span>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+
+  const renderSuppliers = () => (
+    <section className="admin-panel">
+      <h2>Suppliers</h2>
+      <p>Currently unconnected — listed for future API integration.</p>
+      <div className="admin-table">
+        <div className="admin-table-row admin-table-header">
+          <span>Name</span><span>Contact</span><span>Lead time</span>
+        </div>
+        <div className="admin-table-row">
+          <span>MetalCraft Kenya</span>
+          <span>+254 712 345 678</span>
+          <span>14 days</span>
+        </div>
+        <div className="admin-table-row">
+          <span>TechAlloys Ltd</span>
+          <span>+254 722 987 654</span>
+          <span>21 days</span>
+        </div>
+      </div>
+    </section>
+  )
+
+  const renderPurchaseOrders = () => (
+    <section className="admin-panel">
+      <h2>Purchase orders</h2>
+      <p>State machine: draft → confirmed → received. Receiving writes real stock moves + audit entries.</p>
+
+      {/* Create PO form */}
+      <div className="admin-form">
+        <div className="admin-form-head">
+          <h2>Create purchase order</h2>
+          <button type="button" onClick={() => setEditing(null)}>×</button>
+        </div>
+        <div className="admin-fields">
+          <label>Supplier
+            <select>
+              <option>MetalCraft Kenya</option>
+              <option>TechAlloys Ltd</option>
+            </select>
+          </label>
+          <label>Lines (SKU, qty ordered)</label>
+          {/* Would have dynamic line inputs; simplified */}
+        </div>
+        <div className="admin-form-actions">
+          <button className="admin-primary" onClick={() => setNotice('PO created as draft.')}>Create draft PO</button>
+        </div>
+      </div>
+
+      {/* Existing POs */}
+      <h3 style={{marginTop:'24px'}}>Existing purchase orders</h3>
+      <div className="admin-table">
+        <div className="admin-table-row admin-table-header">
+          <span>PO</span><span>Supplier</span><span>State</span><span>Lines</span>
+        </div>
+        {/* Placeholder table rows */}
+        <div className="admin-table-row">
+          <span>po-draft-1</span>
+          <span>MetalCraft Kenya</span>
+          <span>draft</span>
+          <span>3 lines</span>
+        </div>
+      </div>
+    </section>
+  )
+
+  const renderTeam = () => (
+    <section className="admin-panel">
+      <h2>Team role simulator</h2>
+      {roleSimulatorLabel()}
+      <p>This is a client-side role simulation only — NOT authentication. The real backend authorises actions.</p>
+
+      <div className="admin-table">
+        <div className="admin-table-row admin-table-header">
+          <span>Role</span><span>View catalogue</span><span>Create/edit product</span><span>Delete product</span><span>Adjust stock</span><span>Receive PO</span><span>View audit</span>
+        </div>
+        <div className="admin-table-row">
+          <span>Owner</span>
+          <span>✓</span><span>✓</span><span>✓</span><span>✓</span><span>✓</span><span>✓</span>
+        </div>
+        <div className="admin-table-row">
+          <span>Admin</span>
+          <span>✓</span><span>✓</span><span>✓</span><span>✓</span><span>✓</span><span>✓</span>
+        </div>
+        <div className="admin-table-row">
+          <span>Manager</span>
+          <span>✓</span><span>✓</span><span>✗</span><span>✓</span><span>✓</span><span>✓</span>
+        </div>
+        <div className="admin-table-row">
+          <span>Staff</span>
+          <span>✓</span><span>✗</span><span>✗</span><span>✗</span><span>✓</span><span>✗</span>
+        </div>
+        <div className="admin-table-row">
+          <span>Customer</span>
+          <span>✓</span><span>✗</span><span>✗</span><span>✗</span><span>✗</span><span>✗</span>
+        </div>
+      </div>
+    </section>
+  )
+
+  const renderAuditLog = () => (
+    <section className="admin-panel">
+      <h2>Audit log (read‑only)</h2>
+      <p>Every stock change writes an immutable audit entry. No edit or delete controls exist anywhere.</p>
+
+      <div className="admin-table">
+        <div className="admin-table-row admin-table-header">
+          <span>SKU</span><span>Location</span><span>Delta</span><span>Reason</span><span>Actor</span><span>Before</span><span>After</span><span>When</span>
+        </div>
+        {/* Placeholder rows — in production these would come from adapter.getAuditLog() */}
+        {[...Array(10)].map((_, i) => (
+          <div key={i} className="admin-table-row">
+            <span>TATU-FB-GLD</span>
+            <span>Kimathi House Shop G4</span>
+            <span>+5</span>
+            <span>cycle count</span>
+            <span>admin</span>
+            <span>12</span>
+            <span>17</span>
+            <span>2026-01-15 10:30</span>
+          </div>
+        ))}
+      </div>
+
+      <p className="admin-notice" style={{marginTop:'12px', fontSize:'11px', color:'#3e6340'}}>
+        Audit entries cannot be edited or deleted. This log is read‑only by design.
+      </p>
+    </section>
+  )
+
+  const renderSettings = () => (
+    <section className="admin-panel settings-panel">
+      <span className="admin-kicker">Backend connection</span>
+      <h2>Ready for your APIs.</h2>
+      <p>This dashboard is intentionally running in preview mode. Product changes are saved in this browser only.
+      Connect your product, inventory, image-upload and order APIs when you're ready; the UI is already structured for that handoff.</p>
+
+      <div className="settings-status">
+        <span className="status-dot" />
+        Preview mode
+        <small>No production data is being changed.</small>
+      </div>
+
+      <div className="settings-list">
+        <div><b>Product API</b><span>Not connected</span></div>
+        <div><b>Image storage</b><span>Not connected</span></div>
+        <div><b>Orders API</b><span>Not connected</span></div>
+        <div><b>Admin authentication</b><span>Connect before launch</span></div>
+        <div><b>VITE_API_BASE_URL</b><span>Env var needed for HTTP adapter</span></div>
+        <div><b>VITE_API_TOKEN</b><span>Bearer token for API auth</span></div>
+      </div>
+    </section>
+  )
+
   /* ---------- Render JSX ---------- */
   return (
     <div className="admin-shell">
@@ -218,430 +627,3 @@ export function AdminPage() {
     </div>
   )
 }
-
-/* -------- Tab titles -------- */
-const getTabTitle = (t) => {
-  const titles = {
-    overview: 'Good morning, Hereni.',
-    products: 'Product catalogue',
-    stock: 'Stock management',
-    locations: 'Locations',
-    replenishment: 'Replenishment',
-    suppliers: 'Suppliers',
-    'purchase-orders': 'Purchase orders',
-    team: 'Team',
-    audit: 'Audit log',
-    settings: 'Workspace settings',
-  }
-  return titles[t] || 'Admin'
-}
-
-/* -------- Overview -------- */
-const renderOverview = () => (
-  <>
-    <section className="admin-metrics">
-      <div><span>Live products</span><strong>{active}</strong><small>Visible in preview catalogue</small></div>
-      <div><span>Low stock</span><strong>{lowStock}</strong><small>Fewer than 5 units</small></div>
-      <div><span>Stock value</span><strong>{formatMoney(stockValue)}</strong><small>Based on preview stock</small></div>
-      <div><span>Open POs</span><strong>0</strong><small>Pending receipt</small></div>
-    </section>
-
-    <section className="admin-panel">
-      <div className="admin-panel-head">
-        <div><span className="admin-kicker">Quick actions</span><h2>What would you like to do?</h2></div>
-        <div></div>
-      </div>
-      <div className="admin-actions">
-        <button onClick={() => setEditing({ ...editing, name: '' })}><b>+</b><span>Add a product</span></button>
-        <button onClick={() => setTab('products')}><b>▦</b><span>Manage inventory</span></button>
-        <button onClick={() => setTab('settings')}><b>⚙</b><span>Connect your API</span></button>
-      </div>
-    </section>
-
-    <section className="admin-panel">
-      <div className="admin-panel-head">
-        <div><span className="admin-kicker">Recent activity</span><h2>Last 10 audit entries</h2></div>
-      </div>
-      <div className="admin-table">
-        <div className="admin-table-row admin-table-header">
-          <span>SKU</span><span>Action</span><span>Delta</span><span>Reason</span><span>Actor</span><span>When</span>
-        </div>
-        {/* Placeholder rows — in production these would come from adapter.getAuditLog() */}
-        {[...Array(10)].map((_, i) => (
-          <div key={i} className="admin-table-row">
-            <span>TATU-FB-GLD</span>
-            <span>cycle count</span>
-            <span>+5</span>
-            <span>admin</span>
-            <span>2026-01-15 10:30</span>
-            <span></span>
-          </div>
-        ))}
-        {[...Array(10 - items$.length)].map((_, i) => (
-          <div key={i + 10} className="admin-table-row"><span colSpan="6">No audit entries yet.</span></div>
-        ))}
-      </div>
-    </section>
-  </>
-)
-
-/* -------- Products -------- */
-const renderProducts = () => (
-  <section className="admin-panel">
-    <div className="admin-toolbar">
-      <div className="admin-search">
-        <span>⌕</span>
-        <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search products" />
-        <span className="admin-result-count">{filtered.length} products</span>
-      </div>
-    </div>
-
-    {editing && (
-      <form onSubmit={handleSave}>
-        <div className="admin-form-head">
-          <h2>{items$.some(i => i.id === editing.id) ? 'Edit product' : 'New product'}</h2>
-          <button type="button" onClick={() => setEditing(null)}>×</button>
-        </div>
-        <div className="admin-fields">
-          <label>Name<input required value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} placeholder="e.g. Tatu Flatback Gold" /></label>
-          <label>Category>
-            <select value={editing.category} onChange={e => setEditing({ ...editing, category: e.target.value })}>
-              <option>Threadless Flatbacks</option>
-              <option>Clickers</option>
-              <option>Ballbacks</option>
-              <option>Nose Jewellery</option>
-            </select>
-          </label>
-          <label>Price (KES)<input required type="number" min="0" value={editing.price} onChange={e => setEditing({ ...editing, price: e.target.value })} /></label>
-          <label>Stock<input type="number" min="0" value={editing.stock} onChange={e => setEditing({ ...editing, stock: e.target.value })} placeholder="0" /></label>
-          <label className="wide">Material
-            <select value={editing.material} onChange={e => setEditing({ ...editing, material: e.target.value })}>
-              <option>18k Gold-Plated</option>
-              <option>Sterling Silver</option>
-              <option>Titanium</option>
-            </select>
-          </label>
-          <label className="wide">Piercing site
-            <select value={editing.piercingSite} onChange={e => setEditing({ ...editing, piercingSite: e.target.value })}>
-              <option>Lobe</option>
-              <option>Helix</option>
-              <option>Conch</option>
-              <option>Daith</option>
-              <option>Nostril</option>
-              <option>Rook</option>
-              <option>Tragus</option>
-              <option>Flatback</option>
-            </select>
-          </label>
-          <label className="wide">Tags<textarea rows="2" value={editing.tags.join(',')} onChange={e => setEditing({ ...editing, tags: e.target.value.split(',').map(t => t.trim()).filter(t => t) })} placeholder="flatback, gold, lobe"></textarea></label>
-          <label className="wide">Description<textarea rows="3" value={editing.description} onChange={e => setEditing({ ...editing, description: e.target.value })} placeholder="Product details"></textarea></label>
-        </div>
-        <div className="admin-form-actions">
-          <button type="button" className="admin-secondary" onClick={() => setEditing(null)}>Cancel</button>
-          <button className="admin-primary" type="submit">Save product</button>
-        </div>
-      </form>
-    )}
-
-    <div className="admin-table">
-      <div className="admin-table-row admin-table-header">
-        <span>Product</span><span>Category</span><span>Price</span><span>Stock</span><span>Material</span><span>Piercing</span><span /></div>
-        {filtered.map(item => (
-          <div key={item.id} className="admin-table-row">
-            <div className="admin-product-cell">
-              <span className="admin-mini-art">{item.name.slice(0, 1)}</span>
-              <b>{item.name}</b>
-            </div>
-            <span>{item.category}</span>
-            <span>{formatMoney(item.price)}</span>
-            <span>{item.stock || 0}</span>
-            <span>{item.material || '-'}</span>
-            <span>{item.piercingSite || '-'}</span>
-            <div className="admin-row-actions">
-              <button onClick={() => handleEdit(item.id)}>Edit</button>
-              <button onClick={() => handleRemove(item.id)}>Delete</button>
-            </div>
-          </div>
-        ))}
-    </div>
-  </section>
-)
-
-/* -------- Stock -------- */
-const renderStock = () => (
-  <section className="admin-panel">
-    <h2>Stock adjustment</h2>
-    <p>Select a product and location to adjust stock. Positive delta adds, negative removes.</p>
-
-    <div className="admin-form">
-      <div className="admin-form-head">
-        <h2>Adjust stock</h2>
-        <button type="button" onClick={() => setEditing(null)}>×</button>
-      </div>
-      <div className="admin-fields">
-        <label>Product
-          <select onChange={e => setEditing({ ...editing, sku: e.target.value, name: e.target.options[e.target.options.selectedIndex].text })}>
-            <option value="">Select product</option>
-            {items$.map(p => <option key={p.id} value={p.sku}>{p.name}</option>)}
-          </select>
-        </label>
-        <label>Location
-          <select>
-            <option>Kimathi House Shop G4</option>
-            <option>Storage</option>
-          </select>
-        </label>
-        <label>Delta (± units)</label>
-        <input type="number" min="-100" max="100" step="1" />
-        <label>Reason (e.g. cycle count, loss, adjustment)</label>
-        <input type="text" placeholder="e.g. cycle count" />
-        <label>Actor (role)</label>
-        <select>
-          <option>admin</option>
-          <option>manager</option>
-          <option>staff</option>
-        </select>
-        <label>Idempotency key (any string, replay-safe)</label>
-        <input type="text" placeholder="unique-key-123" />
-      </div>
-      <div className="admin-form-actions">
-        <button type="button" className="admin-secondary" onClick={() => setEditing(null)}>Cancel</button>
-        <button className="admin-primary" onClick={() => setNotice('Adjustment submitted — check audit log.')}>Adjust stock</button>
-      </div>
-    </div>
-
-    {/* Current stock view per product */}
-    <h3 style={{marginTop:'24px'}}>
-      On-hand by product
-    </h3>
-    <div className="admin-table">
-      <div className="admin-table-row admin-table-header">
-        <span>Product</span><span>Location</span><span>On-hand</span><span>Reserved</span><span>Available</span>
-      </div>
-      {items$.map(item => {
-        // Simulated: check adapter for stock
-        return (
-          <div key={item.id} className="admin-table-row">
-            <div className="admin-product-cell">
-              <span className="admin-mini-art">{item.name.slice(0,1)}</span>
-              <b>{item.name}</b>
-            </div>
-            <span>Shop G4</span>
-            <span>0</span>
-            <span>0</span>
-            <span>0</span>
-          </div>
-        )
-      })}
-    </div>
-  </section>
-)
-
-/* -------- Locations -------- */
-const renderLocations = () => (
-  <section className="admin-panel">
-    <h2>Locations</h2>
-    <div className="admin-table">
-      <div className="admin-table-row admin-table-header">
-        <span>Location</span><span>Description</span>
-      </div>
-      <div className="admin-table-row">
-        <span>Kimathi House Shop G4</span>
-        <span>Shop floor — main retail display</span>
-      </div>
-      <div className="admin-table-row">
-        <span>Storage</span>
-        <span>Back stock — not on display</span>
-      </div>
-    </div>
-  </section>
-)
-
-/* -------- Replenishment -------- */
-const renderReplenishment = () => (
-  <section className="admin-panel">
-    <h2>Replenishment</h2>
-    <p>Min/max reorder rules. "Suggested order qty" = max − available, clamped ≥ 0.</p>
-    <div className="admin-table">
-      <div className="admin-table-row admin-table-header">
-        <span>Product</span><span>On-hand</span><span>Min</span><span>Max</span><span>Suggested</span>
-      </div>
-      {items$.map(item => {
-        // Simulated: check adapter for reorder rule
-        const available = 0 // placeholder
-        const suggested = available <= 8 ? 8 - available : 0 // simplified
-        return (
-          <div key={item.id} className="admin-table-row">
-            <div className="admin-product-cell">
-              <span className="admin-mini-art">{item.name.slice(0,1)}</span>
-              <b>{item.name}</b>
-            </div>
-            <span>0</span>
-            <span>2</span>
-            <span>8</span>
-            <span>{suggested}</span>
-          </div>
-        )
-      })}
-    </div>
-  </section>
-)
-
-/* -------- Suppliers -------- */
-const renderSuppliers = () => (
-  <section className="admin-panel">
-    <h2>Suppliers</h2>
-    <p>Currently unconnected — listed for future API integration.</p>
-    <div className="admin-table">
-      <div className="admin-table-row admin-table-header">
-        <span>Name</span><span>Contact</span><span>Lead time</span>
-      </div>
-      <div className="admin-table-row">
-        <span>MetalCraft Kenya</span>
-        <span>+254 712 345 678</span>
-        <span>14 days</span>
-      </div>
-      <div className="admin-table-row">
-        <span>TechAlloys Ltd</span>
-        <span>+254 722 987 654</span>
-        <span>21 days</span>
-      </div>
-    </div>
-  </section>
-)
-
-/* -------- Purchase orders -------- */
-const renderPurchaseOrders = () => (
-  <section className="admin-panel">
-    <h2>Purchase orders</h2>
-    <p>State machine: draft → confirmed → received. Receiving writes real stock moves + audit entries.</p>
-
-    {/* Create PO form */}
-    <div className="admin-form">
-      <div className="admin-form-head">
-        <h2>Create purchase order</h2>
-        <button type="button" onClick={() => setEditing(null)}>×</button>
-      </div>
-      <div className="admin-fields">
-        <label>Supplier
-          <select>
-            <option>MetalCraft Kenya</option>
-            <option>TechAlloys Ltd</option>
-          </select>
-        </label>
-        <label>Lines (SKU, qty ordered)</label>
-        {/* Would have dynamic line inputs; simplified */}
-      </div>
-      <div className="admin-form-actions">
-        <button className="admin-primary" onClick={() => setNotice('PO created as draft.')}>Create draft PO</button>
-      </div>
-    </div>
-
-    {/* Existing POs */}
-    <h3 style={{marginTop:'24px'}}>Existing purchase orders</h3>
-    <div className="admin-table">
-      <div className="admin-table-row admin-table-header">
-        <span>PO</span><span>Supplier</span><span>State</span><span>Lines</span>
-      </div>
-      {/* Placeholder table rows */}
-      <div className="admin-table-row">
-        <span>po-draft-1</span>
-        <span>MetalCraft Kenya</span>
-        <span>draft</span>
-        <span>3 lines</span>
-      </div>
-    </div>
-  </section>
-)
-
-/* -------- Team -------- */
-const renderTeam = () => (
-  <section className="admin-panel">
-    <h2>Team role simulator</h2>
-    {roleSimulatorLabel()}
-    <p>This is a client-side role simulation only — NOT authentication. The real backend authorises actions.</p>
-
-    <div className="admin-table">
-      <div className="admin-table-row admin-table-header">
-        <span>Role</span><span>View catalogue</span><span>Create/edit product</span><span>Delete product</span><span>Adjust stock</span><span>Receive PO</span><span>View audit</span>
-      </div>
-      <div className="admin-table-row">
-        <span>Owner</span>
-        <span>✓</span><span>✓</span><span>✓</span><span>✓</span><span>✓</span><span>✓</span>
-      </div>
-      <div className="admin-table-row">
-        <span>Admin</span>
-        <span>✓</span><span>✓</span><span>✓</span><span>✓</span><span>✓</span><span>✓</span>
-      </div>
-      <div className="admin-table-row">
-        <span>Manager</span>
-        <span>✓</span><span>✓</span><span>✗</span><span>✓</span><span>✓</span><span>✓</span>
-      </div>
-      <div className="admin-table-row">
-        <span>Staff</span>
-        <span>✓</span><span>✗</span><span>✗</span><span>✗</span><span>✓</span><span>✗</span>
-      </div>
-      <div className="admin-table-row">
-        <span>Customer</span>
-        <span>✓</span><span>✗</span><span>✗</span><span>✗</span><span>✗</span><span>✗</span>
-      </div>
-    </div>
-  </section>
-)
-
-/* -------- Audit log -------- */
-const renderAuditLog = () => (
-  <section className="admin-panel">
-    <h2>Audit log (read‑only)</h2>
-    <p>Every stock change writes an immutable audit entry. No edit or delete controls exist anywhere.</p>
-
-    <div className="admin-table">
-      <div className="admin-table-row admin-table-header">
-        <span>SKU</span><span>Location</span><span>Delta</span><span>Reason</span><span>Actor</span><span>Before</span><span>After</span><span>When</span>
-      </div>
-      {/* Placeholder rows — in production these would come from adapter.getAuditLog() */}
-      {[...Array(10)].map((_, i) => (
-        <div key={i} className="admin-table-row">
-          <span>TATU-FB-GLD</span>
-          <span>Kimathi House Shop G4</span>
-          <span>+5</span>
-          <span>cycle count</span>
-          <span>admin</span>
-          <span>12</span>
-          <span>17</span>
-          <span>2026-01-15 10:30</span>
-        </div>
-      ))}
-    </div>
-
-    <p className="admin-notice" style={{marginTop:'12px', fontSize:'11px', color:'#3e6340'}}>
-      Audit entries cannot be edited or deleted. This log is read‑only by design.
-    </p>
-  </section>
-)
-
-/* -------- Settings -------- */
-const renderSettings = () => (
-  <section className="admin-panel settings-panel">
-    <span className="admin-kicker">Backend connection</span>
-    <h2>Ready for your APIs.</h2>
-    <p>This dashboard is intentionally running in preview mode. Product changes are saved in this browser only.
-    Connect your product, inventory, image-upload and order APIs when you're ready; the UI is already structured for that handoff.</p>
-
-    <div className="settings-status">
-      <span className="status-dot" />
-      Preview mode
-      <small>No production data is being changed.</small>
-    </div>
-
-    <div className="settings-list">
-      <div><b>Product API</b><span>Not connected</span></div>
-      <div><b>Image storage</b><span>Not connected</span></div>
-      <div><b>Orders API</b><span>Not connected</span></div>
-      <div><b>Admin authentication</b><span>Connect before launch</span></div>
-      <div><b>VITE_API_BASE_URL</b><span>Env var needed for HTTP adapter</span></div>
-      <div><b>VITE_API_TOKEN</b><span>Bearer token for API auth</span></div>
-      <div><b>VITE_HF_API_TOKEN</b><span>HuggingFace inference token (phase 3)</span></div>
-    </div>
-  </section>
-)

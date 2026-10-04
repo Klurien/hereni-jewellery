@@ -61,7 +61,7 @@ function roleName(role) {
 
 /** Honest label text for the role simulator in the UI */
 function roleSimulatorLabel() {
-  return '<span class="text-xs font-medium text-orange-500">role simulation: client-side only, not authentication</span>'
+  return 'role simulation: client-side only, not authentication'
 }
 
-module.exports = { Role, can, roleName, roleSimulatorLabel }
+export { Role, can, roleName, roleSimulatorLabel }

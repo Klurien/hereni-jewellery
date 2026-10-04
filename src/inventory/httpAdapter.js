@@ -203,9 +203,8 @@ export const createAdapter = (overrides = {}) => {
   if (overrides.useHttp) {
     try {
       return createHttpAdapter(overrides.baseUrl || import.meta.env.VITE_API_BASE_URL)
-    } catch (e) {
+    } catch {
       // If HTTP setup fails (e.g. NOT_CONFIGURED), fall back to local
-      // console.warn('HTTP adapter not configured, falling back to localStorage', e)
       return localAdapter
     }
   }
