@@ -3,6 +3,8 @@ import { Link, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import { products, categories } from './data/products'
 import { AdminPage } from './pages/admin/AdminPage'
 import { useSearch } from './search/useSearch'
+import { lookupDeliveryRate } from './data/delivery'
+import { DeliveryCalculator, DeliverySummary } from './components/DeliveryCalculator'
 import './styles.css'
 
 const PHONE = '0116 047583'
@@ -18,7 +20,12 @@ function readCart() {
 
 function CartProvider({ children }) {
   const [items, setItems] = useState(readCart)
+  const [deliveryArea, setDeliveryArea] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(CART_KEY + '-delivery')) || '' } catch { return '' }
+  })
   useEffect(() => localStorage.setItem(CART_KEY, JSON.stringify(items)), [items])
+  useEffect(() => localStorage.setItem(CART_KEY + '-delivery', JSON.stringify(deliveryArea)), [deliveryArea])
+  
   const add = product => setItems(current => {
     const existing = current.find(item => item.id === product.id)
     return existing ? current.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item) : [...current, { ...product, quantity: 1 }]
@@ -28,7 +35,12 @@ function CartProvider({ children }) {
   const clear = () => setItems([])
   const count = items.reduce((sum, item) => sum + item.quantity, 0)
   const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  return <CartContext.Provider value={{ items, add, remove, change, clear, count, total }}>{children}</CartContext.Provider>
+  
+  const deliveryStatus = deliveryArea ? lookupDeliveryRate(deliveryArea) : { status: 'unknown', rate: null }
+  const deliveryEstimate = deliveryStatus.status === 'priced' || deliveryStatus.status === 'cbd' ? deliveryStatus.rate : 0
+  const combinedTotal = total + deliveryEstimate
+
+  return <CartContext.Provider value={{ items, add, remove, change, clear, count, total, deliveryArea, setDeliveryArea, deliveryStatus, deliveryEstimate, combinedTotal }}>{children}</CartContext.Provider>
 }
 const CartContext = createContext()
 function useCart() { return useContext(CartContext) }
@@ -37,20 +49,46 @@ function WhatsAppIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24" cla
 function Sparkle() { return <svg aria-hidden="true" viewBox="0 0 32 32" className="sparkle"><path d="M16 1c1 8 5 12 13 13-8 1-12 5-13 13-1-8-5-12-13-13C11 13 15 9 16 1Z"/><path d="M26 21c.4 3 1.7 4.3 4.7 4.7-3 .4-4.3 1.7-4.7 4.7-.4-3-1.7-4.3-4.7-4.7 3-.4 4.3-1.7 4.7-4.7Z"/></svg> }
 
 function ProductVisual({ kind = 'flatback', large = false, image }) {
-  return <div className={`product-visual visual-${kind} ${large ? 'visual-large' : ''}`} aria-hidden="true">{image ? <img className="product-photo" src={image} alt="" /> : <><span></span><i></i><b></b></>}</div>
+  const aspectRatio = large ? '4/5' : '1/1'
+  return (
+    <div className={`product-visual visual-${kind} ${large ? 'visual-large' : ''}`} aria-hidden="true" style={{ aspectRatio }}>
+      {image ? (
+        <img
+          className="product-photo"
+          src={image}
+          alt=""
+          loading="lazy"
+          width={large ? 560 : 195}
+          height={large ? 700 : 195}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
+        />
+      ) : (
+        <>
+          <span></span><i></i><b></b>
+        </>
+      )}
+    </div>
+  )
 }
 
 function Header() {
   const [open, setOpen] = useState(false)
   const [cartOpen, setCartOpen] = useState(false)
-  const { items, count, total, _remove, change, clear } = useCart()
-  const enquiry = `Hi Hereni Jewellery, I'd like to order:\n${items.map(item => `• ${item.name} × ${item.quantity} — KES ${(item.price * item.quantity).toLocaleString()}`).join('\n')}\n\nTotal: KES ${total.toLocaleString()}`
+  const { items, count, total, deliveryArea, setDeliveryArea, deliveryStatus, deliveryEstimate, combinedTotal, clear } = useCart()
+  const deliveryLine = deliveryArea
+    ? deliveryStatus.status === 'priced' || deliveryStatus.status === 'cbd'
+      ? `\nDelivery to ${deliveryArea}: ≈ KES ${deliveryEstimate.toLocaleString()} (estimate — prices may vary depending on parcel size & weight.)`
+      : deliveryStatus.status === 'quote'
+      ? `\nDelivery to ${deliveryArea}: Covered — price on request (WhatsApp quote)`
+      : `\nDelivery to ${deliveryArea}: Not on rate card — we'll check on WhatsApp`
+    : ''
+  const enquiry = `Hi Hereni Jewellery, I'd like to order:\n${items.map(item => `• ${item.name} × ${item.quantity} — KES ${(item.price * item.quantity).toLocaleString()}`).join('\n')}${deliveryLine}\n\nItems total: KES ${total.toLocaleString()}\nGrand total: KES ${combinedTotal.toLocaleString()}`
   const checkout = `${WHATSAPP}?text=${encodeURIComponent(enquiry)}`
   return <>
     <a className="skip-link" href="#main">Skip to content</a>
     <header className="site-header"><div className="shell header-inner"><Link to="/" className="wordmark" aria-label="Hereni Jewellery home"><span className="wordmark-mark"><Sparkle /></span><span>Hereni <b>Jewellery</b></span></Link><button className="menu-toggle" aria-expanded={open} aria-controls="site-nav" onClick={() => setOpen(!open)}><span className="sr-only">Toggle navigation</span><i></i><i></i></button><nav id="site-nav" className={`site-nav ${open ? 'is-open' : ''}`} aria-label="Main navigation"><Link to="/collection">Shop</Link><Link to="/about">Our story</Link><Link to="/contact">Contact</Link><button className="cart-trigger" onClick={() => setCartOpen(true)}>Bag <span>{count}</span></button><a className="nav-whatsapp" href={WHATSAPP} target="_blank" rel="noreferrer"><WhatsAppIcon /> WhatsApp</a></nav></div></header>
     {cartOpen && <div className="drawer-backdrop" onClick={() => setCartOpen(false)} />}
-    <aside className={`cart-drawer ${cartOpen ? 'open' : ''}`} aria-label="Shopping bag"><div className="drawer-head"><div><p className="eyebrow">Your selection</p><h2>Shopping bag <small>({count})</small></h2></div><button className="close-button" onClick={() => setCartOpen(false)} aria-label="Close shopping bag">×</button></div>{items.length === 0 ? <div className="empty-bag"><span>♡</span><p>Your bag is waiting for a little something.</p><Link className="button button-primary" to="/collection" onClick={() => setCartOpen(false)}>Explore pieces</Link></div> : <><div className="drawer-items">{items.map(item => <div className="drawer-item" key={item.id}><ProductVisual kind={item.art} image={item.image} /><div><h3>{item.name}</h3><p>KES {item.price.toLocaleString()}</p><div className="quantity"><button onClick={() => change(item.id, item.quantity - 1)} aria-label={`Decrease ${item.name}`}>−</button><span>{item.quantity}</span><button onClick={() => change(item.id, item.quantity + 1)} aria-label={`Increase ${item.name}`}>+</button></div></div><strong>KES {(item.price * item.quantity).toLocaleString()}</strong></div>)}</div><div className="drawer-total"><span>Total</span><strong>KES {total.toLocaleString()}</strong></div><a className="button button-primary full-button" href={checkout} target="_blank" rel="noreferrer">Continue to WhatsApp <span>↗</span></a><button className="clear-bag" onClick={clear}>Clear bag</button><p className="drawer-note">No payment is taken here. Hereni confirms availability, delivery and payment directly on WhatsApp.</p></>}</aside>
+    <aside className={`cart-drawer ${cartOpen ? 'open' : ''}`} aria-label="Shopping bag"><div className="drawer-head"><div><p className="eyebrow">Your selection</p><h2>Shopping bag <small>({count})</small></h2></div><button className="close-button" onClick={() => setCartOpen(false)} aria-label="Close shopping bag">×</button></div>{items.length === 0 ? <div className="empty-bag"><span>♡</span><p>Your bag is waiting for a little something.</p><Link className="button button-primary" to="/collection" onClick={() => setCartOpen(false)}>Explore pieces</Link></div> : <><div className="drawer-items">{items.map(item => <div className="drawer-item" key={item.id}><ProductVisual kind={item.art} image={item.image} /><div><h3>{item.name}</h3><p>KES {item.price.toLocaleString()}</p><div className="quantity"><button onClick={() => change(item.id, item.quantity - 1)} aria-label={`Decrease ${item.name}`}>−</button><span>{item.quantity}</span><button onClick={() => change(item.id, item.quantity + 1)} aria-label={`Increase ${item.name}`}>+</button></div></div><strong>KES {(item.price * item.quantity).toLocaleString()}</strong></div>)}</div><div className="drawer-total"><span>Items total</span><strong>KES {total.toLocaleString()}</strong></div><DeliverySummary area={deliveryArea} onChange={setDeliveryArea} /><div className="drawer-total drawer-grand-total"><span>Grand total</span><strong>KES {combinedTotal.toLocaleString()}</strong></div><a className="button button-primary full-button" href={checkout} target="_blank" rel="noreferrer">Continue to WhatsApp <span>↗</span></a><button className="clear-bag" onClick={clear}>Clear bag</button><p className="drawer-note">No payment is taken here. Hereni confirms availability, delivery and payment directly on WhatsApp.</p></>}</aside>
   </>
 }
 
@@ -66,6 +104,7 @@ function ProductCard({ product }) { const { add } = useCart(); return <article c
 function CollectionPage() {
   const [category, setCategory] = useState('All pieces')
   const { results, loading, error, searchQuery, setSearchQuery } = useSearch(products, '')
+  const { deliveryArea, setDeliveryArea, deliveryStatus, deliveryEstimate } = useCart()
 
   // Combined filter: category AND search (results already filtered by search query)
   const filtered = category === 'All pieces'
@@ -119,6 +158,22 @@ function CollectionPage() {
             {item}
           </button>
         ))}
+      </div>
+
+      {/* Delivery Calculator */}
+      <div className="delivery-calculator-section" style={{ marginBottom: '24px', padding: '16px', background: '#fbfaf7', border: '1px solid #e3ded4', borderRadius: '8px' }}>
+        <DeliveryCalculator
+          value={deliveryArea}
+          onChange={setDeliveryArea}
+          placeholder="Enter delivery area for estimate (e.g., Ngara, Thika, Karen...)"
+          className="collection-delivery-calculator"
+        />
+        {deliveryArea && deliveryStatus.status === 'priced' && (
+          <p className="delivery-preview-note" style={{ marginTop: '8px', fontSize: '13px', color: '#28251f' }}>
+            <strong>Estimated delivery to {deliveryArea}: ≈ KES {deliveryEstimate.toLocaleString()}</strong>
+            <br /><small style={{ color: '#8b857a' }}>Prices may vary depending on parcel size & weight. Final amount confirmed on WhatsApp.</small>
+          </p>
+        )}
       </div>
     </section>
 

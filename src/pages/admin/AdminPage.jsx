@@ -3,13 +3,15 @@
  * Odoo-like information architecture, original visual design.
  * Mobile-first, keyboard-reachable, aria-* on tables and forms.
  * Role switcher is client-side only — NOT authentication.
+ * Data loaded from localAdapter (localStorage-backed preview; not production backend).
  */
 
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { products as seedProducts } from '../../data/products'
 import { localAdapter } from '../../inventory/localAdapter.js'
 import { roleSimulatorLabel } from '../../inventory/roles'
+import { DeliveryAdminPanel } from '../../components/DeliveryCalculator'
 import '../../pages/admin/admin.css'
 
 /* ==========================================================
@@ -30,29 +32,55 @@ export function AdminPage() {
 
   // Load state from localStorage adapter
   const [items, setItems] = useState(null)
-  useEffect(() => {
-    let mounted = true
-    ;(async () => {
-      try {
-        const s = await localAdapter.healthCheck()
-        if (!mounted) return
-        if (s.healthy) {
-          const list = await localAdapter.listProducts()
-          setItems(list.products || [])
-          setNotice('Inventory loaded from localStorage.')
-        } else {
-          setNotice('Adapter not healthy. Using seed data.')
-          setItems(seedProducts)
-        }
-      } catch {
-        if (!mounted) return
-        // Error is non-fatal; we fall back to seed data
-        console.warn('AdminPage init: using seed data fallback')
-        setNotice('Using seed data (localStorage unavailable).')
+  const [stockData, setStockData] = useState({ quants: {}, audit: [], reorderRules: {}, suppliers: [], pOs: [] })
+  const [loading, setLoading] = useState(true)
+  const loadedRef = useRef(false)
+
+  const loadAll = useCallback(async () => {
+    try {
+      const health = await localAdapter.healthCheck()
+      if (!health.healthy) {
+        setNotice('Adapter not healthy. Using seed data.')
         setItems(seedProducts)
+        setLoading(false)
+        return
       }
-    })()
-    return () => { mounted = false }
+
+      const [productsRes, stockRes, auditRes, rulesRes, suppliersRes] = await Promise.all([
+        localAdapter.listProducts(),
+        localAdapter.getStock ? localAdapter.getStock() : Promise.resolve({ error: null, quant: [] }),
+        localAdapter.getAuditLog(),
+        localAdapter.getReorderRules(),
+        localAdapter.getSuppliers(),
+      ])
+
+      setItems(productsRes.products || [])
+      setStockData({
+        quants: stockRes.quants || {},
+        audit: auditRes.entries || [],
+        reorderRules: rulesRes.rules || {},
+        suppliers: suppliersRes.suppliers || [],
+        pOs: [], // would come from adapter if implemented
+      })
+      setNotice('Inventory loaded from localStorage.')
+    } catch (e) {
+      console.warn('AdminPage init: using seed data fallback', e)
+      setNotice('Using seed data (localStorage unavailable).')
+      setItems(seedProducts)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (loadedRef.current) return
+    loadedRef.current = true
+    loadAll()
+  }, [loadAll])
+
+  const persist = useCallback((nextItems) => {
+    setItems(nextItems)
+    setNotice('Catalogue updated.')
   }, [])
 
   const items$ = useMemo(() => items || seedProducts, [items])
@@ -72,20 +100,18 @@ export function AdminPage() {
     )
   }, [items$, query])
 
+  /* ---------- Stock helpers ---------- */
+  const getQuant = (sku, locationId) => stockData.quants?.[`${sku}:${locationId}`] || null
+  const LOCATIONS = { SHOP: 'Kimathi House Shop G4', STORAGE: 'Storage' }
+
+  const formatMoney = (value) => `KES ${Number(value || 0).toLocaleString()}`
+
   /* ---------- Overview metrics ---------- */
   const active = useMemo(() => items$.filter(i => i.status !== 'hidden').length, [items$])
   const lowStock = useMemo(() =>
     items$.filter(i => Number(i.stock) > 0 && Number(i.stock) < 5).length, [items$])
   const stockValue = useMemo(() =>
     items$.reduce((sum, item) => sum + (Number(item.price) * Number(item.stock || 0)), 0), [items$])
-
-  /* ---------- Persist helpers ---------- */
-  const persist = (nextItems) => {
-    setItems(nextItems)
-    setNotice('Catalogue updated.')
-  }
-
-  const formatMoney = (value) => `KES ${Number(value || 0).toLocaleString()}`
 
   /* ---------- Tab navigation ---------- */
   const handleTab = (newTab) => setTab(newTab)
@@ -101,6 +127,7 @@ export function AdminPage() {
       team: 'Team',
       audit: 'Audit log',
       settings: 'Workspace settings',
+      delivery: 'Delivery rates',
     }
     return titles[t] || 'Admin'
   }
@@ -112,7 +139,6 @@ export function AdminPage() {
     const clean = { ...editing, name: editing.name.trim(), price: Number(editing.price) || 0, stock: Number(editing.stock) || 0 }
     if (!clean.name) return setNotice('Add a product name first.')
 
-    // Block delete when reserved > 0
     const reservedCheck = items$.some(
       it => it.id === editing.id && (it.reserved || 0) > 0
     )
@@ -125,7 +151,6 @@ export function AdminPage() {
   }
 
   const handleRemove = (id) => {
-    // Block if reserved > 0
     const reserved = items$.find(i => i.id === id)?.reserved || 0
     if (reserved > 0) {
       setNotice(`Cannot delete: ${items$.find(i => i.id === id)?.name} has ${reserved} reserved unit(s).`)
@@ -147,7 +172,6 @@ export function AdminPage() {
   const handleEdit = (id) => {
     const product = items$.find(i => i.id === id)
     if (!product) return setNotice('Product not found.')
-    // Check reserved > 0
     const reserved = product.reserved || 0
     if (reserved > 0) return setNotice(`Cannot edit: ${product.name} has ${reserved} reserved unit(s). Release first.`)
     setEditing({ ...product })
@@ -184,20 +208,19 @@ export function AdminPage() {
           <div className="admin-table-row admin-table-header">
             <span>SKU</span><span>Action</span><span>Delta</span><span>Reason</span><span>Actor</span><span>When</span>
           </div>
-          {/* Placeholder rows — in production these would come from adapter.getAuditLog() */}
-          {[...Array(10)].map((_, i) => (
-            <div key={i} className="admin-table-row">
-              <span>TATU-FB-GLD</span>
-              <span>cycle count</span>
-              <span>+5</span>
-              <span>admin</span>
-              <span>2026-01-15 10:30</span>
-              <span></span>
-            </div>
-          ))}
-          {[...Array(Math.max(0, 10 - items$.length))].map((_, i) => (
-            <div key={i + 10} className="admin-table-row"><span colSpan="6">No audit entries yet.</span></div>
-          ))}
+          {stockData.audit.length > 0
+            ? stockData.audit.slice(0, 10).map((entry, i) => (
+                <div key={i} className="admin-table-row">
+                  <span>{entry.sku}</span>
+                  <span>{entry.reason}</span>
+                  <span>{entry.delta > 0 ? '+' : ''}{entry.delta}</span>
+                  <span>{entry.actor}</span>
+                  <span>{new Date(entry.at).toLocaleString()}</span>
+                  <span></span>
+                </div>
+              ))
+            : <div className="admin-table-row"><span colSpan="6">No audit entries yet.</span></div>
+          }
         </div>
       </section>
     </>
@@ -326,7 +349,7 @@ export function AdminPage() {
         </div>
       </div>
 
-      {/* Current stock view per product */}
+      {/* Current stock view per product — real data from localAdapter */}
       <h3 style={{marginTop:'24px'}}>
         On-hand by product
       </h3>
@@ -334,20 +357,50 @@ export function AdminPage() {
         <div className="admin-table-row admin-table-header">
           <span>Product</span><span>Location</span><span>On-hand</span><span>Reserved</span><span>Available</span>
         </div>
-        {items$.map(item => {
-          // Simulated: check adapter for stock
-          return (
-            <div key={item.id} className="admin-table-row">
-              <div className="admin-product-cell">
-                <span className="admin-mini-art">{item.name.slice(0,1)}</span>
-                <b>{item.name}</b>
+        {items$.length === 0 ? (
+          <div className="admin-table-row"><span colSpan="5">No products in catalogue.</span></div>
+        ) : items$.map(item => {
+          const shopQuant = getQuant(item.sku, LOCATIONS.SHOP)
+          const storageQuant = getQuant(item.sku, LOCATIONS.STORAGE)
+
+          if (!shopQuant && !storageQuant) {
+            return (
+              <div key={item.id} className="admin-table-row">
+                <div className="admin-product-cell">
+                  <span className="admin-mini-art">{item.name.slice(0,1)}</span>
+                  <b>{item.name}</b>
+                </div>
+                <span colSpan="4" style={{color:'#8b857a',fontStyle:'italic'}}>No stock record found</span>
               </div>
-              <span>Shop G4</span>
-              <span>0</span>
-              <span>0</span>
-              <span>0</span>
-            </div>
-          )
+            )
+          }
+
+          return [
+            shopQuant && (
+              <div key={`${item.id}-shop`} className="admin-table-row">
+                <div className="admin-product-cell">
+                  <span className="admin-mini-art">{item.name.slice(0,1)}</span>
+                  <b>{item.name}</b>
+                </div>
+                <span>{LOCATIONS.SHOP}</span>
+                <span>{shopQuant.onHand}</span>
+                <span>{shopQuant.reserved}</span>
+                <span><strong>{shopQuant.onHand - shopQuant.reserved}</strong></span>
+              </div>
+            ),
+            storageQuant && (
+              <div key={`${item.id}-storage`} className="admin-table-row">
+                <div className="admin-product-cell" style={{opacity:0.6}}>
+                  <span className="admin-mini-art">{item.name.slice(0,1)}</span>
+                  <b>{item.name}</b>
+                </div>
+                <span>{LOCATIONS.STORAGE}</span>
+                <span>{storageQuant.onHand}</span>
+                <span>{storageQuant.reserved}</span>
+                <span><strong>{storageQuant.onHand - storageQuant.reserved}</strong></span>
+              </div>
+            ),
+          ]
         })}
       </div>
     </section>
@@ -378,22 +431,43 @@ export function AdminPage() {
       <p>Min/max reorder rules. "Suggested order qty" = max − available, clamped ≥ 0.</p>
       <div className="admin-table">
         <div className="admin-table-row admin-table-header">
-          <span>Product</span><span>On-hand</span><span>Min</span><span>Max</span><span>Suggested</span>
+          <span>Product</span><span>On-hand (Shop)</span><span>Reserved</span><span>Available</span><span>Min</span><span>Max</span><span>Suggested</span>
         </div>
         {items$.map(item => {
-          // Simulated: check adapter for reorder rule
-          const available = 0 // placeholder
-          const suggested = available <= 8 ? 8 - available : 0 // simplified
+          const shopQuant = getQuant(item.sku, LOCATIONS.SHOP)
+          const rule = stockData.reorderRules?.[item.sku]
+
+          if (!shopQuant && !rule) {
+            return (
+              <div key={item.id} className="admin-table-row">
+                <div className="admin-product-cell">
+                  <span className="admin-mini-art">{item.name.slice(0,1)}</span>
+                  <b>{item.name}</b>
+                </div>
+                <span colSpan="6" style={{color:'#8b857a',fontStyle:'italic'}}>No stock record or reorder rule</span>
+              </div>
+            )
+          }
+
+          const onHand = shopQuant?.onHand ?? 0
+          const reserved = shopQuant?.reserved ?? 0
+          const available = onHand - reserved
+          const min = rule?.min ?? 2
+          const max = rule?.max ?? 8
+          const suggested = available < max ? max - available : 0
+
           return (
             <div key={item.id} className="admin-table-row">
               <div className="admin-product-cell">
                 <span className="admin-mini-art">{item.name.slice(0,1)}</span>
                 <b>{item.name}</b>
               </div>
-              <span>0</span>
-              <span>2</span>
-              <span>8</span>
-              <span>{suggested}</span>
+              <span>{onHand}</span>
+              <span>{reserved}</span>
+              <span><strong>{available}</strong></span>
+              <span>{min}</span>
+              <span>{max}</span>
+              <span>{suggested > 0 ? suggested : '—'}</span>
             </div>
           )
         })}
@@ -409,16 +483,19 @@ export function AdminPage() {
         <div className="admin-table-row admin-table-header">
           <span>Name</span><span>Contact</span><span>Lead time</span>
         </div>
-        <div className="admin-table-row">
-          <span>MetalCraft Kenya</span>
-          <span>+254 712 345 678</span>
-          <span>14 days</span>
-        </div>
-        <div className="admin-table-row">
-          <span>TechAlloys Ltd</span>
-          <span>+254 722 987 654</span>
-          <span>21 days</span>
-        </div>
+        {stockData.suppliers.length > 0
+          ? stockData.suppliers.map(s => (
+              <div key={s.id} className="admin-table-row">
+                <span>{s.name}</span>
+                <span>{s.contact}</span>
+                <span>{s.leadTimeDays} days</span>
+              </div>
+            ))
+          : [
+              <div key="supplier-1" className="admin-table-row"><span>MetalCraft Kenya</span><span>+254 712 345 678</span><span>14 days</span></div>,
+              <div key="supplier-2" className="admin-table-row"><span>TechAlloys Ltd</span><span>+254 722 987 654</span><span>21 days</span></div>,
+            ]
+        }
       </div>
     </section>
   )
@@ -455,12 +532,8 @@ export function AdminPage() {
         <div className="admin-table-row admin-table-header">
           <span>PO</span><span>Supplier</span><span>State</span><span>Lines</span>
         </div>
-        {/* Placeholder table rows */}
         <div className="admin-table-row">
-          <span>po-draft-1</span>
-          <span>MetalCraft Kenya</span>
-          <span>draft</span>
-          <span>3 lines</span>
+          <span colSpan="4" style={{color:'#8b857a',fontStyle:'italic'}}>No purchase orders stored in preview mode</span>
         </div>
       </div>
     </section>
@@ -509,19 +582,21 @@ export function AdminPage() {
         <div className="admin-table-row admin-table-header">
           <span>SKU</span><span>Location</span><span>Delta</span><span>Reason</span><span>Actor</span><span>Before</span><span>After</span><span>When</span>
         </div>
-        {/* Placeholder rows — in production these would come from adapter.getAuditLog() */}
-        {[...Array(10)].map((_, i) => (
-          <div key={i} className="admin-table-row">
-            <span>TATU-FB-GLD</span>
-            <span>Kimathi House Shop G4</span>
-            <span>+5</span>
-            <span>cycle count</span>
-            <span>admin</span>
-            <span>12</span>
-            <span>17</span>
-            <span>2026-01-15 10:30</span>
-          </div>
-        ))}
+        {stockData.audit.length > 0
+          ? stockData.audit.slice(0, 20).map((entry, i) => (
+              <div key={i} className="admin-table-row">
+                <span>{entry.sku}</span>
+                <span>{entry.locationId}</span>
+                <span>{entry.delta > 0 ? '+' : ''}{entry.delta}</span>
+                <span>{entry.reason}</span>
+                <span>{entry.actor}</span>
+                <span>{entry.before}</span>
+                <span>{entry.after}</span>
+                <span>{new Date(entry.at).toLocaleString()}</span>
+              </div>
+            ))
+          : <div className="admin-table-row"><span colSpan="8">No audit entries yet.</span></div>
+        }
       </div>
 
       <p className="admin-notice" style={{marginTop:'12px', fontSize:'11px', color:'#3e6340'}}>
@@ -540,7 +615,7 @@ export function AdminPage() {
       <div className="settings-status">
         <span className="status-dot" />
         Preview mode
-        <small>No production data is being changed.</small>
+        <small>No production data is being changed. Data persists in localStorage only.</small>
       </div>
 
       <div className="settings-list">
@@ -555,6 +630,17 @@ export function AdminPage() {
   )
 
   /* ---------- Render JSX ---------- */
+  if (loading) {
+    return (
+      <div className="admin-shell" style={{display:'flex',minHeight:'100vh',alignItems:'center',justifyContent:'center'}}>
+        <div style={{textAlign:'center',color:'#8b857a'}}>
+          <div style={{fontSize:'24px',marginBottom:'12px'}}>⟳</div>
+          Loading inventory from localStorage…
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="admin-shell">
       <aside className="admin-sidebar">
@@ -593,6 +679,8 @@ export function AdminPage() {
                   onClick={() => handleTab('team')}>Team</button>
           <button className={tab === 'audit' ? 'active' : ''}
                   onClick={() => handleTab('audit')}>Audit log</button>
+          <button className={tab === 'delivery' ? 'active' : ''}
+                  onClick={() => handleTab('delivery')}>Delivery</button>
           <button className={tab === 'settings' ? 'active' : ''}
                   onClick={() => handleTab('settings')}>Settings</button>
         </nav>
@@ -622,6 +710,7 @@ export function AdminPage() {
         {tab === 'purchase-orders' && renderPurchaseOrders()}
         {tab === 'team' && renderTeam()}
         {tab === 'audit' && renderAuditLog()}
+        {tab === 'delivery' && <DeliveryAdminPanel showUnverifiedNumbers={true} />}
         {tab === 'settings' && renderSettings()}
       </main>
     </div>

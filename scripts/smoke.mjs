@@ -102,13 +102,13 @@ try {
   const contactHref = await page.$eval('.enquiry-form a', el => el.href)
   assert(contactHref.includes('Test%20Visitor'), 'Contact form did not prepare WhatsApp message')
 
-  // 6. Admin: verify audit log tab shows content (placeholder entries)
+  // 6. Admin: verify audit log tab renders (data loaded from localStorage, may be empty on first run)
   await page.goto(`${base}/admin`, { waitUntil: 'domcontentloaded' })
   await wait(500)
   await clickAdminTab(page, 'Audit')
   await wait(300)
-  const auditText = await page.$eval('.admin-table', el => el.textContent)
-  assert(auditText.includes('cycle count') || auditText.includes('TATU'), 'Audit log did not show expected entries')
+  const auditTable = await page.$('.admin-table')
+  assert(auditTable, 'Audit log tab did not render table')
 
   // 7. No console errors
   assert(errors.length === 0, `Browser errors:\n${errors.join('\n')}`)
