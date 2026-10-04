@@ -11,7 +11,7 @@
 
 import { products as seedProducts } from '../data/products.js'
 import {
-  InventoryAdapter, assertAdapter, DomainError, AuditEntry, StockQuant,
+  assertAdapter, DomainError, AuditEntry, StockQuant,
   ReorderRule, PurchaseOrder, PurchaseOrderLine, Role, can,
   suggestOrderQty, validateReorderRule, validatePOLine,
   receivePO as domainReceivePO, reserveStock as domainReserveStock,

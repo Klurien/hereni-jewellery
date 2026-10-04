@@ -40,12 +40,12 @@ export const rrfMerge = (lexicalRanks, semanticRanks, k = 60) => {
   // semanticRanks: Array of { id, rank } where rank is 1-based position
   const fused = {}
   // Add lexical contributions
-  lexicalRanks.forEach((entry, idx) => {
+  lexicalRanks.forEach((entry) => {
     const id = entry.id
     fused[id] = (fused[id] || 0) + 1 / (k + entry.rank)
   })
   // Add semantic contributions
-  semanticRanks.forEach((entry, idx) => {
+  semanticRanks.forEach((entry) => {
     const id = entry.id
     fused[id] = (fused[id] || 0) + 1 / (k + entry.rank)
   })

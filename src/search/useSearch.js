@@ -14,7 +14,6 @@ import { useState, useEffect, useCallback } from 'react'
 
 /** Import search modules */
 import { hybridSearch, lexicalSearch } from './fuse.js'
-import { EMBEDDING_RECIPE } from './embed.js'
 
 /** State shape */
 export const useSearch = (productCatalogue, initialQuery = '') => {
@@ -70,7 +69,7 @@ export const useSearch = (productCatalogue, initialQuery = '') => {
           }
         }
 
-        worker.onerror = (e) => {
+        worker.onerror = (_e) => {
           setError('AI search worker error — showing keyword results')
           setMode('lexical')
         }

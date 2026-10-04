@@ -8,7 +8,6 @@
  * so the swap is genuinely one line when the founder provides API env vars.
  */
 
-import { InventoryAdapter, assertAdapter, DomainError, AuditEntry, StockQuant, ReorderRule, PurchaseOrder, PurchaseOrderLine, Role, can, suggestOrderQty, validateReorderRule, validatePOLine } from './domain.js'
 import { localAdapter } from './localAdapter.js'
 
 /** Build the adapter with an optional base URL override */
@@ -141,7 +140,7 @@ const createHttpAdapter = (baseUrl) => {
   }
 
   /** Release a previous reservation */
-  const releaseReservation = async (reservationId, actor) => {
+  const releaseReservation = async (reservationId, _actor) => {
     const response = await fetch(`${baseUrl}/stock/reservation/${reservationId}`, {
       method: 'DELETE',
       headers: {

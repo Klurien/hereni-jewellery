@@ -34,7 +34,6 @@ const CartContext = createContext()
 function useCart() { return useContext(CartContext) }
 
 function WhatsAppIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24" className="icon"><path d="M20.5 3.5A11.6 11.6 0 0 0 3.4 17L2 22l5.2-1.4A11.6 11.6 0 1 0 20.5 3.5Z"/><path d="M8.4 7.5c.2-.4.4-.4.6-.4h.5c.2 0 .4 0 .6.5l.8 1.9c.1.3.1.5-.1.7l-.6.7c-.2.2-.2.4-.1.6.5 1 1.1 1.8 2.1 2.4.3.2.5.1.7-.1l.7-.8c.2-.2.4-.2.6-.1l2 1c.3.1.4.3.4.5v.6c-.1.7-.9 1.4-1.6 1.5-1.2.2-3.1-.2-5.1-1.7-2.1-1.6-3.5-3.6-3.8-4.8-.2-.6.1-1.3.3-1.7Z"/></svg> }
-function InstagramIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24" className="icon"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.4" cy="6.6" r=".7" fill="currentColor" stroke="none"/></svg> }
 function Sparkle() { return <svg aria-hidden="true" viewBox="0 0 32 32" className="sparkle"><path d="M16 1c1 8 5 12 13 13-8 1-12 5-13 13-1-8-5-12-13-13C11 13 15 9 16 1Z"/><path d="M26 21c.4 3 1.7 4.3 4.7 4.7-3 .4-4.3 1.7-4.7 4.7-.4-3-1.7-4.3-4.7-4.7 3-.4 4.3-1.7 4.7-4.7Z"/></svg> }
 
 function ProductVisual({ kind = 'flatback', large = false, image }) {
@@ -44,7 +43,7 @@ function ProductVisual({ kind = 'flatback', large = false, image }) {
 function Header() {
   const [open, setOpen] = useState(false)
   const [cartOpen, setCartOpen] = useState(false)
-  const { items, count, total, remove, change, clear } = useCart()
+  const { items, count, total, _remove, change, clear } = useCart()
   const location = useLocation()
   useEffect(() => { setOpen(false); setCartOpen(false) }, [location.pathname])
   const enquiry = `Hi Hereni Jewellery, I'd like to order:\n${items.map(item => `• ${item.name} × ${item.quantity} — KES ${(item.price * item.quantity).toLocaleString()}`).join('\n')}\n\nTotal: KES ${total.toLocaleString()}`
@@ -66,7 +65,7 @@ function ProductCard({ product }) { const { add } = useCart(); return <article c
 function CollectionPage() {
   const [category, setCategory] = useState('All pieces')
   const [searchQuery, setSearchQuery] = useState('')
-  const { results: searchResults, mode, loading, error, canUseAi } = useSearch(products, searchQuery)
+  const { results: _searchResults, mode, loading, error, canUseAi } = useSearch(products, searchQuery)
 
   // Combined filter: category AND search
   const filteredByCategory = category === 'All pieces' ? products : products.filter(product => product.category === category)

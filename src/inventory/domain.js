@@ -17,60 +17,52 @@
  *     - done is irreversible; needs compensating adjustment to reverse
  */
 
-/** Stock quantity on hand at a location */
-export const StockQuant = {
-  /** @param {string} sku */
-  create(sku, locationId, onHand, reserved) {
-    return { sku, locationId, onHand, reserved }
-  }
+/** Stock quantity on hand at a location
+ * @param {string} sku
+ * @param {string} locationId
+ * @param {number} onHand
+ * @param {number} reserved
+ * @returns {{sku: string, locationId: string, onHand: number, reserved: number}}
+ */
+function StockQuant_create(sku, locationId, onHand, reserved) {
+  return { sku, locationId, onHand, reserved }
 }
 
-/** A single immutable audit entry stock mutation (JSDoc‑only, no ES type) */
-const AuditEntry = {
-  id: '',
-  sku: '',
-  locationId: '',
-  delta: 0,
-  reason: '',
-  actor: '',
-  at: '',
-  before: 0,
-  after: 0,
+/** A single immutable audit entry stock mutation (JSDoc‑only, no ES type)
+ * @typedef {{id: string, sku: string, locationId: string, delta: number, reason: string, actor: string, at: string, before: number, after: number}} AuditEntry
+ */
+
+/** Reorder rule defines min/max stock triggers
+ * @param {{min: number, max: number}} rule
+ * @returns {boolean} true if valid
+ */
+function ReorderRule_validate(rule) {
+  return rule.min >= 0 && rule.max >= 0 && rule.min <= rule.max
 }
 
-/** Reorder rule defines min/max stock triggers */
-export type ReorderRule = {
-  min: number
-  max: number
-  /** Enforce min <= max and both >= 0 */
-  validate() { return this.min >= 0 && this.max >= 0 && this.min <= this.max }
+/** A purchase order with lines; state: draft → confirmed → received
+ * @param {{id: string, supplier: string, lines: PurchaseOrderLine[], state: string, expectedDate?: string}} po
+ */
+
+/** A purchase-order line
+ * @param {{sku: string, qtyOrdered: number, qtyReceived: number}} line
+ * @returns {{availableToReceive: number}} */
+function PurchaseOrderLine_availableToReceive(line) {
+  return line.qtyOrdered - line.qtyReceived
 }
 
-/** A purchase order with lines; state: draft → confirmed → received */
-export type PurchaseOrder = {
-  id: string
-  supplier: string
-  lines: PurchaseOrderLine[]
-  state: 'draft' | 'confirmed' | 'received'
-  expectedDate?: string
-}
+/** User role simulation — client-side only, NOT authentication
+ * @type {('owner'|'admin'|'manager'|'staff'|'customer')}
+ */
+const Role_type = 'owner' | 'admin' | 'manager' | 'staff' | 'customer'
 
-/** A purchase-order line */
-export type PurchaseOrderLine = {
-  sku: string
-  qtyOrdered: number
-  qtyReceived: number
-  /** Enforce qtyReceived <= qtyOrdered */
-  get availableToReceive() { return this.qtyOrdered - this.qtyReceived }
-}
-
-/** User role simulation — client-side only, NOT authentication */
-export type Role = 'owner' | 'admin' | 'manager' | 'staff' | 'customer'
-
-/** Permission check: can(role, action) */
-export const can = (role: Role, action: string): boolean => {
+/** Permission check: can(role, action)
+ * @param {string} role
+ * @param {string} action
+ * @returns {boolean} */
+function can(role, action) {
   // Lookup table per kane's ADR §4
-  const perms: Record<Role, Record<string, boolean>> = {
+  const perms = {
     owner: {
       viewCatalogue: true, createEditProduct: true, deleteProduct: true,
       adjustStock: true, receivePO: true, createConfirmPO: true,
@@ -100,82 +92,79 @@ export const can = (role: Role, action: string): boolean => {
   return !!perms[role]?.[action]
 }
 
-/** Stock-move state machine */
-export const SM = {
-  /** Valid transitions: draft -> confirmed -> reserved -> done */
-  // from draft: confirmed | cancelled
-  fromDraft: ['confirmed', 'cancelled'],
-  // from confirmed: reserved | cancelled
-  fromConfirmed: ['reserved', 'cancelled'],
-  // from reserved: done | cancelled
-  fromReserved: ['done', 'cancelled'],
-  // done is irreversible (needs compensating adjustment)
-  fromDone: [],
-
-  /** Is a transition valid? */
-  isValidTransition(from: string, to: string): boolean {
-    if (from === 'done') return false // irreversible
-    if (to === 'done') return true // allowed from reserved/confirmed/draft
-    if (from === ' draft') return this.fromDraft.includes(to)
-    if (from === 'confirmed') return this.fromConfirmed.includes(to)
-    if (from === 'reserved') return this.fromReserved.includes(to)
-    return false
-  },
+/** Stock-move state machine
+ * @param {{from: string, to: string}} transition
+ * @returns {{error: string | null, newState: string}} */
+function transitionStockMove(move, targetState, _actor) {
+  const { state } = move
+  if (state === 'done') {
+    return { error: 'INVALID_TRANSITION', newState: state }
+  }
+  const validTransitions = {
+    draft: ['confirmed', 'cancelled'],
+    confirmed: ['reserved', 'cancelled'],
+    reserved: ['done', 'cancelled'],
+  }
+  const allowed = validTransitions[state]
+  if (!allowed) {
+    return { error: 'INVALID_TRANSITION', newState: state }
+  }
+  if (!allowed.includes(targetState)) {
+    return { error: 'INVALID_TRANSITION', newState: state }
+  }
+  // done is irreversible — if target is done, mark as done; any future transition fails
+  const newState = targetState === 'done' ? 'done' : targetState
+  return { error: null, newState }
 }
 
 /** Error types thrown by domain functions */
-export const enum DomainError {
-  NEGATIVE_STOCK = 'NEGATIVE_STOCK',
-  INSUFFICIENT_AVAILABLE = 'INSUFFICIENT_AVAILABLE',
-  VERSION_CONFLICT = 'VERSION_CONFLICT',
-  IDempotent_REPLAY = 'IDempotent_REPLAY',
-  REORDER_RULE_VIOLATION = 'REORDER_RULE_VIOLATION',
-  INVALID_TRANSITION = 'INVALID_TRANSITION',
+const DomainError = {
+  NEGATIVE_STOCK: 'NEGATIVE_STOCK',
+  INSUFFICIENT_AVAILABLE: 'INSUFFICIENT_AVAILABLE',
+  VERSION_CONFLICT: 'VERSION_CONFLICT',
+  IDempotent_REPLAY: 'IDempotent_REPLAY',
+  REORDER_RULE_VIOLATION: 'REORDER_RULE_VIOLATION',
+  INVALID_TRANSITION: 'INVALID_TRANSITION',
 }
 
-/**
- * Validate that onHand >= 0 for a (sku, location) pair.
- * Returns DomainError.NEGATIVE_STOCK if violated.
+/** Validate that onHand >= 0 for a (sku, location) pair.
+ * @param {number} onHand
+ * @returns {string | null} DomainError.NEGATIVE_STOCK or null
  */
-export const validateOnHand = (onHand: number): DomainError | null => {
+function validateOnHand(onHand) {
   return onHand < 0 ? DomainError.NEGATIVE_STOCK : null
 }
 
-/**
- * Validate that available = onHand - reserved >= 0.
- * Returns DomainError.INSUFFICIENT_AVAILABLE if reservation > available.
+/** Validate that available = onHand - reserved >= 0.
+ * @param {number} onHand
+ * @param {number} reserved
+ * @returns {string | null} DomainError.INSUFFICIENT_AVAILABLE or null
  */
-export const validateAvailable = (onHand: number, reserved: number): DomainError | null => {
+function validateAvailable(onHand, reserved) {
   const avail = onHand - reserved
   return avail < 0 ? DomainError.INSUFFICIENT_AVAILABLE : null
 }
 
-/**
- * Idempotent adjustment applier.
- * Given current state (quant + version), and an adjustment with an idempotencyKey,
- * returns { error, oldState, newState }.
- * If the same idempotencyKey was already applied, returns the previous result unchanged.
- */
-export const applyAdjustment = (
-  quant: StockQuant,
-  delta: number,
-  reason: string,
-  actor: string,
-  idempotencyKey: string,
-  currentVersion: number,
-  // cache of previously applied keys per location (in-memory for single-user)
-  appliedCache: Map<string, number> = new Map()
-) => {
+/** Idempotent adjustment applier.
+ * @param {{onHand: number, reserved: number, version: number}} quant
+ * @param {number} delta
+ * @param {string} reason
+ * @param {string} actor
+ * @param {string} idempotencyKey
+ * @param {number} currentVersion
+ * @param {Map<string, number>} appliedCache
+ * @returns {{error: string | null, replay: boolean, newQuant: object, auditEntry: object, version: number}} */
+function applyAdjustment(quant, delta, reason, actor, idempotencyKey, currentVersion, appliedCache) {
   // Idempotency check: if this key was already applied, return previous result
   if (appliedCache.has(idempotencyKey)) {
-    const prevVersion = appliedCache.get(idempotencyKey)!
+    const prevVersion = appliedCache.get(idempotencyKey)
+    const error = null
+    const replay = true
     return {
-      error: null,
+      error,
+      replay,
       oldVersion: prevVersion,
-      oldOnHand: quant.onHand, // returning snapshot from that apply
-      // Actually, for idempotent replay we return the state as-is from before replay
-      // Since the state hasn't changed, we just signal it was a replay
-      replay: true,
+      oldOnHand: quant.onHand,
       message: 'Adjustment already applied with this idempotency key; no double-apply.',
     }
   }
@@ -193,9 +182,7 @@ export const applyAdjustment = (
   }
 
   // Apply the adjustment
-  const newReserved = Math.max(0, Math.min(quant.reserved + delta, quant.onHand + delta)) // simplified
-  // Actually: reserved shouldn't change from a generic delta; delta is the onHand change
-  // Let's treat delta as onHand adjustment only, reserved stays
+  const _newReserved = quant.reserved // reserved unchanged by generic delta
   const newOnHandVal = newOnHand
   const newAfter = newOnHandVal - quant.reserved // available after
 
@@ -210,7 +197,7 @@ export const applyAdjustment = (
   appliedCache.set(idempotencyKey, quant.version + 1) // store new version
 
   // Build audit entry
-  const auditEntry: AuditEntry = {
+  const auditEntry = {
     id: `audit-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     sku: quant.sku,
     locationId: quant.locationId,
@@ -227,19 +214,16 @@ export const applyAdjustment = (
     replay: false,
     newQuant,
     auditEntry,
+    version: newQuant.version,
   }
 }
 
-/**
- * Reserve quantity from available stock.
- * Returns { error, newQuant } or success with updated quant.
- * Reservation > available ⇒ INSUFFICIENT_AVAILABLE
- */
-export const reserveStock = (
-  quant: StockQuant,
-  qty: number,
-  actor: string
-) => {
+/** Reserve quantity from available stock.
+ * @param {{onHand: number, reserved: number, available: number, version: number}} quant
+ * @param {number} qty
+ * @param {string} actor
+ * @returns {{error: string | null, newQuant: object}} */
+function reserveStock(quant, qty, _actor) {
   const avail = quant.available
   if (qty > avail) {
     return { error: DomainError.INSUFFICIENT_AVAILABLE, newQuant: quant }
@@ -255,13 +239,11 @@ export const reserveStock = (
   return { error: null, newQuant }
 }
 
-/**
- * Release a reservation, reducing reserved qty.
- */
-export const releaseReservation = (
-  quant: StockQuant,
-  qty: number
-) => {
+/** Release a reservation, reducing reserved qty.
+ * @param {{onHand: number, reserved: number, version: number}} quant
+ * @param {number} qty
+ * @returns {{error: string | null, newQuant: object}} */
+function releaseReservation(quant, qty) {
   const newReserved = Math.max(quant.reserved - qty, 0)
   const newOnHand = quant.onHand
   const newQuant = {
@@ -273,79 +255,46 @@ export const releaseReservation = (
   return { error: null, newQuant }
 }
 
-/**
- * Transition a stock move through the state machine.
- * Valid transitions: draft → confirmed → reserved → done
- * cancelled from draft/confirmed only; done is irreversible.
+/** Validate a reorder rule: min <= max, both >= 0
+ * @param {{min: number, max: number}} rule
+ * @returns {string | null} DomainError.REORDER_RULE_VIOLATION or null
  */
-export const transitionStockMove = (
-  move: { id: string; state: string },
-  targetState: string,
-  actor: string
-): { error: DomainError | null; newState: string } => {
-  const { state } = move
-  if (state === 'done') {
-    return { error: DomainError.INVALID_TRANSITION, newState: state }
-  }
-  const validTransitions: Record<string, string[]> = {
-    draft: SM.fromDraft,
-    confirmed: SM.fromConfirmed,
-    reserved: SM.fromReserved,
-  }
-  const allowed = validTransitions[state]
-  if (!allowed) {
-    return { error: DomainError.INVALID_TRANSITION, newState: state }
-  }
-  if (!allowed.includes(targetState)) {
-    return { error: DomainError.INVALID_TRANSITION, newState: state }
-  }
-  // done is irreversible — if target is done, mark as done; any future transition fails
-  const newState = targetState === 'done' ? 'done' : targetState
-  return { error: null, newState }
-}
-
-/**
- * Validate a reorder rule: min <= max, both >= 0
- */
-export const validateReorderRule = (rule: ReorderRule): DomainError | null => {
+function validateReorderRule(rule) {
   if (rule.min < 0 || rule.max < 0) return DomainError.REORDER_RULE_VIOLATION
   if (rule.min > rule.max) return DomainError.REORDER_RULE_VIOLATION
   return null
 }
 
-/**
- * Compute suggested order qty for a reorder rule:
- * suggested = max - available, clamped >= 0
+/** Compute suggested order qty for a reorder rule:
+ * @param {{min: number, max: number}} rule
+ * @param {number} available
+ * @returns {number} suggested qty >= 0
  */
-export const suggestOrderQty = (rule: ReorderRule, available: number): number => {
+function suggestOrderQty(rule, available) {
   const suggestion = rule.max - available
   return suggestion >= 0 ? suggestion : 0
 }
 
-/**
- * Validate a purchase order line: qtyReceived <= qtyOrdered
+/** Validate a purchase order line: qtyReceived <= qtyOrdered
+ * @param {{qtyOrdered: number, qtyReceived: number}} line
+ * @returns {string | null} DomainError.REORDER_RULE_VIOLATION or null
  */
-export const validatePOLine = (line: PurchaseOrderLine): DomainError | null => {
+function validatePOLine(line) {
   if (line.qtyReceived > line.qtyOrdered) {
-    return DomainError.REORDER_RULE_VIOLATION // reuse; could add PO-specific error
+    return DomainError.REORDER_RULE_VIOLATION
   }
   return null
 }
 
-/**
- * Receive a purchase order line: write real stock moves + audit entries.
- * Called when a PO transitions to received.
- * For each line, onHand += qtyReceived, version++ and audit entry written.
- * Cannot exceed qtyOrdered (enforced by validatePOLine above).
- */
-export const receivePO = (
-  quant: StockQuant,
-  qty: number,
-  sku: string,
-  locationId: string,
-  actor: string,
-  currentVersion: number
-) => {
+/** Receive a purchase order line: write real stock moves + audit entries.
+ * @param {{onHand: number, reserved: number, version: number}} quant
+ * @param {number} qty
+ * @param {string} sku
+ * @param {string} locationId
+ * @param {string} actor
+ * @param {number} currentVersion
+ * @returns {{error: string | null, newQuant: object, auditEntry: object}} */
+function receivePO(quant, qty, sku, locationId, actor, currentVersion) {
   const newOnHand = quant.onHand + qty
   const validation = validateOnHand(newOnHand)
   if (validation) {
@@ -361,7 +310,7 @@ export const receivePO = (
     version: quant.version + 1,
   }
   // Build audit entry for the receipt
-  const auditEntry: AuditEntry = {
+  const auditEntry = {
     id: `audit-po-${Date.now()}`,
     sku,
     locationId,
@@ -373,4 +322,25 @@ export const receivePO = (
     after: newOnHand,
   }
   return { error: null, newQuant, auditEntry }
+}
+
+// Export the public API
+module.exports = {
+  StockQuant: StockQuant_create,
+  AuditEntry,
+  ReorderRule: ReorderRule_validate,
+  PurchaseOrderLine: PurchaseOrderLine_availableToReceive,
+  Role: Role_type,
+  can,
+  transitionStockMove,
+  DomainError,
+  validateOnHand,
+  validateAvailable,
+  applyAdjustment,
+  reserveStock,
+  releaseReservation,
+  validateReorderRule,
+  suggestOrderQty,
+  validatePOLine,
+  receivePO,
 }

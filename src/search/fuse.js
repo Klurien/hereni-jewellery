@@ -54,7 +54,7 @@ export const hybridSearch = (query, products, semanticVector) => {
   // 2. If we have a semantic vector, compute cosine similarity for each product
   let semanticScores = {}
   if (semanticVector && semanticVector.length === 384) {
-    products.forEach((p, i) => {
+    products.forEach((p) => {
       // In production, each product would have a precomputed vector
       // For now, we'll use a placeholder - the UI will show lexical only
       semanticScores[p.id] = 0
