@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { Link, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import { products, categories } from './data/products'
 import { AdminPage } from './pages/AdminPage'
+import { useSearch } from './search/useSearch'
+import './styles.css'
 
 const PHONE = '0116 047583'
 const ORDER_PHONE = '+254 794 590 908'
@@ -61,7 +63,122 @@ function HomePage() { return <Layout><section className="hero shell"><div classN
 
 function ProductCard({ product }) { const { add } = useCart(); return <article className="product-card"><Link to={`/product/${product.id}`} className="product-card-image"><ProductVisual kind={product.art} image={product.image} /></Link><div className="product-card-body"><div><p className="product-category">{product.category}</p><Link to={`/product/${product.id}`}><h2>{product.name}</h2></Link></div><strong>KES {product.price.toLocaleString()}</strong></div><button className="add-button" onClick={() => add(product)}>Add to bag <span>+</span></button></article> }
 
-function CollectionPage() { const [category, setCategory] = useState('All pieces'); const filtered = category === 'All pieces' ? products : products.filter(product => product.category === category); return <Layout><section className="page-hero shell"><p className="eyebrow">The collection</p><h1>Pieces for your piercing story.</h1><p>Browse the catalogue from our WhatsApp collection. Select a piece to add it to your bag, then send your order enquiry directly to Hereni.</p></section><section className="shell catalogue-layout"><div className="catalogue-main"><div className="filter-row" aria-label="Filter products">{categories.map(item => <button className={category === item ? 'active' : ''} onClick={() => setCategory(item)} key={item}>{item}</button>)}</div><p className="result-count">{filtered.length} pieces</p><div className="product-grid">{filtered.map(product => <ProductCard product={product} key={product.id} />)}</div></div><aside className="enquiry-card"><p className="eyebrow">Need help?</p><h2>Not sure where to start?</h2><p>Send Hereni a message with your piercing type and the finish you love. We’ll help you choose.</p><a className="button button-primary full-button" href={`${WHATSAPP}?text=${encodeURIComponent('Hi Hereni Jewellery, I need help choosing a piece.')}`} target="_blank" rel="noreferrer">Ask on WhatsApp <span>↗</span></a><div className="enquiry-detail"><span>Public enquiries</span><strong>{PHONE}</strong><span>Catalogue orders</span><strong>{ORDER_PHONE}</strong></div></aside></section></Layout> }
+function CollectionPage() {
+  const [category, setCategory] = useState('All pieces')
+  const [searchQuery, setSearchQuery] = useState('')
+  const { results: searchResults, mode, loading, error, canUseAi } = useSearch(products, searchQuery)
+
+  // Combined filter: category AND search
+  const filteredByCategory = category === 'All pieces' ? products : products.filter(product => product.category === category)
+  const filtered = searchQuery
+    ? filteredByCategory.filter(p =>
+        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (p.material && p.material.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (p.piercingSite && p.piercingSite.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (Array.isArray(p.tags) && p.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()))) ||
+        (p.description && p.description.toLowerCase().includes(searchQuery.toLowerCase()))
+      )
+    : filteredByCategory
+
+  // Result count
+  const resultCount = filtered.length
+
+  return <Layout>
+    <section className="page-hero shell">
+      <p className="eyebrow">The collection</p>
+      <h1>Pieces for your piercing story.</h1>
+      <p>Browse the catalogue from our WhatsApp collection. Select a piece to add it to your bag, then send your order enquiry directly to Hereni.</p>
+      {/* Search bar - always visible */}
+      <div className="collection-search" style={{ marginBottom: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder="Search pieces..."
+          style={{
+            flex: '1',
+            padding: '8px 12px',
+            border: '1px solid #d3ccbf',
+            background: '#fbfaf7',
+            font: '12px var(--sans)',
+            color: '#28251f',
+            borderRadius: '4px',
+            '@media (max-width: 320px)': { width: '100%', fontSize: '12px' }
+          }}
+          aria-label="Search products"
+        />
+        {canUseAi && <button style={{ padding: '8px 12px', background: '#e8dfcf', border: '1px solid #ccc5b8', borderRadius: '4px', fontSize: '11px' }} onClick={() => setCanUseAi(!canUseAi)}>
+          AI search
+        </button>}
+        {!canUseAi && <span style={{ padding: '8px 12px', background: '#f0ece4', border: '1px solid #ccc5b8', borderRadius: '4px', fontSize: '11px', color: '#8b857a' }}>basic</span>}
+      </div>
+      {error && <p style={{ color: '#3e6340', fontSize: '12px', marginTop: '8' }}>AI search unavailable — showing keyword results</p>}
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
+        {categories.map(item => (
+          <button
+            key={item}
+            className={category === item ? 'active' : ''}
+            onClick={() => setCategory(item)}
+            style={{
+              padding: '6px 12px',
+              fontSize: '11px',
+              border: '1px solid #e3ded4',
+              background: category === item ? '#e8dfcf' : 'transparent',
+              borderRadius: '4px',
+            }}
+            aria-label={`Filter by ${item}`}
+          >
+            {item}
+          </button>
+        ))}
+      </div>
+    </section>
+
+    <section className="shell catalogue-layout">
+      <div className="catalogue-main">
+        {loading && <p>Loading search results...</p>}
+        {mode === 'error' && <p style={{ color: '#3e6340' }}>AI search unavailable — showing keyword results</p>}
+
+        <div className="filter-row" aria-label="Filter products">
+          {categories.map(item => (
+            <button
+              className={category === item ? 'active' : ''}
+              onClick={() => setCategory(item)}
+              key={item}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+        <p className="result-count">{resultCount} pieces</p>
+
+        <div className="product-grid">
+          {resultCount === 0 ? (
+            <p style={{ textAlign: 'center', color: '#8b857a' }}>No pieces found. Try broadening your search.</p>
+          ) : filtered.map(product => (
+            <ProductCard product={product} key={product.id} />
+          ))}
+        </div>
+      </div>
+
+      <aside className="enquiry-card">
+        <p className="eyebrow">Need help?</p>
+        <h2>Not sure where to start?</h2>
+        <p>Send Hereni a message with your piercing type and the finish you love. We'll help you choose.</p>
+        <a className="button button-primary full-button" href={`${WHATSAPP}?text=${encodeURIComponent('Hi Hereni Jewellery, I need help choosing a piece.')}`} target="_blank" rel="noreferrer">
+          Ask on WhatsApp <span>↗</span>
+        </a>
+        <div className="enquiry-detail">
+          <span>Public enquiries</span>
+          <strong>{PHONE}</strong>
+          <span>Catalogue orders</span>
+          <strong>{ORDER_PHONE}</strong>
+        </div>
+      </aside>
+    </section>
+  </Layout>
+}
 
 function ProductPage() { const { id } = useParams(); const product = products.find(item => item.id === id); const { add } = useCart(); if (!product) return <Layout><NotFoundPage /></Layout>; return <Layout><section className="shell product-page"><div className="product-page-visual"><ProductVisual kind={product.art} image={product.image} large /></div><div className="product-page-copy"><p className="eyebrow">{product.category}</p><h1>{product.name}</h1><strong className="product-page-price">KES {product.price.toLocaleString()}</strong><p className="product-page-description">A Hereni catalogue piece for your jewellery collection. Availability, sizing, finish options and delivery are confirmed directly on WhatsApp before you order.</p><button className="button button-primary" onClick={() => add(product)}>Add to bag <span>+</span></button><a className="button button-quiet" href={`${WHATSAPP}?text=${encodeURIComponent(`Hi Hereni Jewellery, I'm interested in ${product.name} (KES ${product.price.toLocaleString()}). Is it available?`)}`} target="_blank" rel="noreferrer">Ask about this piece</a><div className="detail-list"><div><span>Material</span><strong>18K gold-plated / sterling silver options</strong></div><div><span>Ordering</span><strong>Enquiry confirmed on WhatsApp</strong></div><div><span>Catalogue</span><strong>Hereni Jewellery · Nairobi</strong></div></div></div></section></Layout> }
 function AboutPage() { return <Layout><section className="page-hero shell"><p className="eyebrow">Hereni Jewellery</p><h1>Piercing jewellery with a personal touch.</h1><p>Hereni Jewellery is an online-based piercing jewellery brand based in Nairobi, Kenya.</p></section><section className="shell about-layout"><div className="about-art" role="img" aria-label="Abstract gold jewellery detail"><div className="about-ring"></div><div className="about-gem"></div></div><div className="about-copy"><p className="eyebrow">The short version</p><h2>A personal way to discover your next piece.</h2><p>Hereni shares 18K gold-plated and sterling silver jewellery for different piercing styles. Browse the catalogue, build a bag, and speak directly to the person behind it.</p><p>Have a question about a style, finish or placement? Reach Hereni on WhatsApp or Instagram and start there.</p><a className="button button-primary" href={WHATSAPP} target="_blank" rel="noreferrer">Start a conversation <span>↗</span></a></div></section></Layout> }
